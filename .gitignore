@@ -1,0 +1,10 @@
+.gradle
+.kotlin
+.DS_Store
+.envrc.local
+.vscode
+
+build
+
+http
+configs

@@ -1,0 +1,22 @@
+.PHONY: build run-snowflake run-bigquery run-mysql run-oracle run-databricks
+
+build:
+	./gradlew build
+
+run-snowflake:
+	OTEL_EXPORTER_OTLP_ENDPOINT=http://192.168.1.41:4317 OTEL_SERVICE_NAME=ndc-snowflake HASURA_CONNECTOR_PORT=8081 HASURA_CONFIGURATION_DIRECTORY=./configs/snowflake NDC_JDBC_SOURCE=snowflake ./gradlew run
+
+run-bigquery:
+	OTEL_EXPORTER_OTLP_ENDPOINT=http://192.168.1.41:4317 OTEL_SERVICE_NAME=ndc-bigquery HASURA_CONNECTOR_PORT=8082 HASURA_CONFIGURATION_DIRECTORY=./configs/bigquery NDC_JDBC_SOURCE=bigquery ./gradlew run
+
+run-mysql:
+	OTEL_EXPORTER_OTLP_ENDPOINT=http://192.168.1.41:4317 OTEL_SERVICE_NAME=ndc-mysql HASURA_CONNECTOR_PORT=8083 HASURA_CONFIGURATION_DIRECTORY=./configs/mysql NDC_JDBC_SOURCE=mysql ./gradlew run
+
+run-oracle:
+	OTEL_EXPORTER_OTLP_ENDPOINT=http://192.168.1.41:4317 OTEL_SERVICE_NAME=ndc-oracle HASURA_CONNECTOR_PORT=8084 HASURA_CONFIGURATION_DIRECTORY=./configs/oracle NDC_JDBC_SOURCE=oracle ./gradlew run
+
+run-databricks:
+	OTEL_EXPORTER_OTLP_ENDPOINT=http://192.168.1.41:4317 OTEL_SERVICE_NAME=ndc-databricks HASURA_CONNECTOR_PORT=8085 HASURA_CONFIGURATION_DIRECTORY=./configs/databricks NDC_JDBC_SOURCE=databricks ./gradlew run
+
+run-redshift:
+	OTEL_EXPORTER_OTLP_ENDPOINT=http://192.168.1.41:4317 OTEL_SERVICE_NAME=ndc-redshift HASURA_CONNECTOR_PORT=8086 HASURA_CONFIGURATION_DIRECTORY=./configs/redshift NDC_JDBC_SOURCE=redshift ./gradlew run

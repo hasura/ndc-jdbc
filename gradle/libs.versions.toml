@@ -1,0 +1,43 @@
+[versions]
+hikari-version = "6.2.1"
+kotlin-version = "2.1.10"
+kotlinx-cli-version = "0.3.5"
+kotlinx-serialization-version = "1.8.0"
+logback-version = "1.5.15"
+opentelemetry-version = "1.46.0"
+semver4j-version = "3.1.0"
+vertx-version = "4.5.12"
+
+# Database drivers
+databricks-jdbc-version = "2.7.1"
+snowflake-jdbc-version = "3.22.0"
+mysql-jdbc-version = "9.2.0"
+oracle-jdbc-version = "23.6.0.24.10"
+redshift-jdbc-version = "2.1.0.32"
+
+[libraries]
+hikari = { module = "com.zaxxer:HikariCP", version.ref = "hikari-version" }
+kotlinx-cli = { module = "org.jetbrains.kotlinx:kotlinx-cli", version.ref = "kotlinx-cli-version" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization-version" }
+logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback-version" }
+opentelemetry-api = { module = "io.opentelemetry:opentelemetry-api", version.ref = "opentelemetry-version" }
+opentelemetry-kotlin = { module = "io.opentelemetry:opentelemetry-extension-kotlin", version.ref = "opentelemetry-version" }
+opentelemetry-otlp = { module = "io.opentelemetry:opentelemetry-exporter-otlp", version.ref = "opentelemetry-version" }
+opentelemetry-sdk = { module = "io.opentelemetry:opentelemetry-sdk", version.ref = "opentelemetry-version" }
+opentelemetry-semconv = { module = "io.opentelemetry.semconv:opentelemetry-semconv", version = "1.30.0-rc.1" }
+semver4j = { module = "com.vdurmont:semver4j", version.ref = "semver4j-version" }
+vertx-core = { module = "io.vertx:vertx-core", version.ref = "vertx-version" }
+vertx-kotlin = { module = "io.vertx:vertx-lang-kotlin", version.ref = "vertx-version" }
+vertx-kotlin-coroutines = { module = "io.vertx:vertx-lang-kotlin-coroutines", version.ref = "vertx-version" }
+vertx-web = { module = "io.vertx:vertx-web", version.ref = "vertx-version" }
+
+# Database drivers
+databricks-jdbc = { module = "com.databricks:databricks-jdbc", version.ref = "databricks-jdbc-version" }
+snowflake-jdbc = { module = "net.snowflake:snowflake-jdbc", version.ref = "snowflake-jdbc-version" }
+mysql-jdbc = { module = "com.mysql:mysql-connector-j", version.ref = "mysql-jdbc-version" }
+oracle-jdbc = { module = "com.oracle.database.jdbc:ojdbc11", version.ref = "oracle-jdbc-version" }
+redshift-jdbc = { module = "com.amazon.redshift:redshift-jdbc42", version.ref = "redshift-jdbc-version" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin-version" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin-version" }
