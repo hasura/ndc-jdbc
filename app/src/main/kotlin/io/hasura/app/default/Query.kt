@@ -1,12 +1,23 @@
 package io.hasura.app.default
 
 import io.hasura.app.base.*
-import hasura.ndc.connector.*
-import hasura.ndc.ir.*
+import io.hasura.ndc.connector.*
+import io.hasura.ndc.ir.*
 import org.jooq.impl.DSL
 import org.jooq.SQLDialect
+import org.jooq.impl.DSL.*
+import org.jooq.Query as JooqQuery
+import org.jooq.Field as JooqField
+import org.jooq.*
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonArray
+
+const val variablesCTEName = "vars"
+const val resultsCTEName = "results"
+const val collectionName = "coll"
+const val variableName = "var"
+const val indexName = "idx"
+const val rowNumberName = "rn"
 
 class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
     override fun generateQuery(
@@ -16,14 +27,41 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
     ): String {
         ConnectorLogger.logger.info("generateSql: $request")
 
-        val fields = request.query.fields?.mapNotNull { (alias, field) ->
-            when (field) {
-                is Field.Column -> DSL.field(field.column).`as`(alias)
-                else -> throw ConnectorError.NotSupported("Unsupported: Relationships are not supported")
-            }
-        } ?: emptyList()
+        val ctx = DSL.using(getDatabaseDialect(source))
 
-        val sql = DSL.using(getDatabaseDialect(source))
+        val query = when {
+            request.variables.isNotEmpty() -> generateCTEQuery(ctx, request)
+            else -> generateSingleQuery(ctx, request)
+        }
+
+        ConnectorLogger.logger.info("SQL: ${query.toString()}")
+
+        return query.toString()
+    }
+
+    fun generateCTEQuery(
+        ctx: DSLContext,
+        request: QueryRequest,
+    ): JooqQuery {
+        val varsCTE = buildVariablesCTE(request)
+        val resultsCTE = buildResultsCTE(request, varsCTE)
+        val fields = getFieldSelects(request)
+        var sql = ctx
+            .with(varsCTE)
+            .with(resultsCTE)
+            .select(fields)
+            .from(resultsCTE)
+            .orderBy(DSL.field(DSL.name(indexName)))
+
+        return sql
+    }
+
+    fun generateSingleQuery(
+        ctx: DSLContext,
+        request: QueryRequest,
+    ): JooqQuery {
+        val fields = getFieldSelects(request)
+        val sql = ctx
             .select(fields)
             .from(request.collection)
 
@@ -32,7 +70,9 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
                 when (val target = element.target) {
                     is OrderByTarget.Column -> {
                         if (target.path.isNotEmpty() || target.fieldPath != null) {
-                            throw ConnectorError.NotSupported("Nested fields and relationships are not supported in order by")
+                            throw ConnectorError.NotSupported(
+                                "Nested fields and relationships are not supported in order by"
+                            )
                         }
                         when (element.orderDirection) {
                             OrderDirection.ASC -> DSL.field(target.name).asc()
@@ -57,19 +97,84 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
         request.query.limit?.let { sql.limit(it.toInt()) }
         request.query.offset?.let { sql.offset(it.toInt()) }
 
-        ConnectorLogger.logger.info("SQL: ${sql.toString()}")
-
-        return sql.toString()
+        return sql
     }
 
     private fun getDatabaseDialect(type: DatabaseSource): SQLDialect = when (type) {
         DatabaseSource.SNOWFLAKE -> SQLDialect.SNOWFLAKE
         DatabaseSource.BIGQUERY -> SQLDialect.BIGQUERY
         DatabaseSource.REDSHIFT -> SQLDialect.REDSHIFT
-        else -> SQLDialect.DEFAULT
     }
 
-    private fun generateCondition(expr: Expression): org.jooq.Condition = when (expr) {
+    private fun getFieldSelects(
+        request: QueryRequest,
+    ): List<JooqField<*>> = getFieldSelectsHelper(request, true)
+
+    private fun getFieldSelectsWithoutAlias(
+        request: QueryRequest,
+    ): List<JooqField<*>> = getFieldSelectsHelper(request, false)
+
+    private fun buildVariablesCTE(
+        request: QueryRequest,
+    ): CommonTableExpression<Record> {
+        return DSL
+            .name(variablesCTEName)
+            .`as`(
+                request.variables.mapIndexed { index, variable ->
+                    DSL.select(
+                        *variable.map { (_, value) ->
+                            DSL.inline(value).`as`(variableName)
+                        }.toTypedArray(),
+                        DSL.inline(index).`as`(indexName)
+                    )
+                }.reduce { acc: SelectOrderByStep<Record>, select: SelectSelectStep<Record> ->
+                    acc.unionAll(select)
+                }
+            )
+    }
+
+    private fun buildResultsCTE(
+        request: QueryRequest,
+        varsCTE: CommonTableExpression<Record>
+    ): CommonTableExpression<Record> {
+        val fields = getFieldSelectsWithoutAlias(request)
+        return DSL
+            .name(resultsCTEName)
+            .`as`(
+                DSL.select(
+                    *fields.toTypedArray() + arrayOf(
+                        rowNumber()
+                            .over()
+                            .partitionBy(DSL.field(DSL.name(indexName)))
+                            .orderBy(DSL.field(DSL.name(indexName)))
+                            .`as`(rowNumberName),
+                        DSL.field(DSL.name(indexName))
+                    )
+                )
+                .from(request.collection)
+                .join(varsCTE)
+                .on(request.query.predicate?.let { generateCondition(it) } 
+                    ?: throw ConnectorError.NotSupported("Predicate is required for variable queries")
+                )
+            )
+    }
+
+    private fun getVariableJoinColumn(request: QueryRequest): String =
+        request.query.predicate?.let { predicate ->
+            when (predicate) {
+                is Expression.BinaryComparisonOperator -> {
+                    val value = predicate.value
+                    if (value is ComparisonValue.Variable) {
+                        value.name
+                    } else {
+                        throw ConnectorError.NotSupported("Predicate must use a variable comparison")
+                    }
+                }
+                else -> throw ConnectorError.NotSupported("Predicate must be a binary comparison")
+            }
+        } ?: throw ConnectorError.NotSupported("No predicate comparison found")
+
+    private fun generateCondition(expr: Expression): Condition = when (expr) {
         is Expression.And -> 
             DSL.and(expr.expressions.map { generateCondition(it) })
         
@@ -106,8 +211,10 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
                 }
                 is ComparisonValue.Column -> 
                     throw ConnectorError.NotSupported("Column comparisons not supported yet")
-                is ComparisonValue.Variable -> 
-                    throw ConnectorError.NotSupported("Variable comparisons not supported yet")
+                is ComparisonValue.Variable -> {
+                    DSL.field(getColumnName(expr.column))
+                        .eq(DSL.field("${DSL.name(variablesCTEName)}.${DSL.name(variableName)}"))
+                }
             }
         }
         
@@ -153,4 +260,27 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
             is JsonArray -> convertJsonArray(jsonElement)
             else -> jsonElement.toString()
         }
+
+    private fun getFieldSelectsHelper(
+        request: QueryRequest,
+        applyAlias: Boolean = true,
+        collection: String? = null
+    ): List<JooqField<*>> =
+        request.query.fields?.map { (alias, field) ->
+            when (field) {
+                is Field.Column -> {
+                    val columnRef = if (collection != null) {
+                        DSL.field("${collection}.${field.column}")
+                    } else {
+                        DSL.field(field.column)
+                    }
+                    if (applyAlias) {
+                        columnRef.`as`(alias)
+                    } else {
+                        columnRef
+                    }
+                }
+                else -> throw ConnectorError.NotSupported("Unsupported: Relationships are not supported")
+            }
+        } ?: emptyList()
 }

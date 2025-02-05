@@ -1,8 +1,8 @@
 package io.hasura.app.default
 
 import io.hasura.app.base.*
-import hasura.ndc.connector.*
-import hasura.ndc.ir.*
+import io.hasura.ndc.connector.*
+import io.hasura.ndc.ir.*
 import io.micrometer.core.instrument.MeterRegistry
 import kotlinx.serialization.json.*
 import java.nio.file.Path
@@ -85,51 +85,19 @@ class DefaultConnector<T : ColumnType>(
             try {
                 Telemetry.withActiveSpan("queryDatabase") { span ->
                     val query: DefaultQuery<T> = DefaultQuery()
-                    val statement = connection.prepareStatement(
+                    val queryExecutor = DefaultConnection(state.client)
+                    val rows = queryExecutor.executeQuery(
                         query.generateQuery(source, configuration, request)
                     )
-                    val results = statement.executeQuery()
 
-                    val rows = mutableListOf<Map<String, JsonElement>>()
+                    // Now you have all rows in the 'rows' list, where each row is a Map of column names to values
+                    ConnectorLogger.logger.info("Query results: {}", rows)
 
-                    // Get metadata about the columns
-                    val metaData = results.metaData
-                    val columnCount = metaData.columnCount
+                    val rowSet = RowSet(
+                        rows = rows
+                    )
 
-                    Telemetry.withActiveSpan("processResults") { span ->
-                        // Iterate over all rows
-                        while (results.next()) {
-                            val row = mutableMapOf<String, JsonElement>()
-
-                            // Iterate over all columns in the current row
-                            for (columnIndex in 1..columnCount) {
-                                val columnName = metaData.getColumnName(columnIndex)
-                                val value = results.getObject(columnIndex)
-                                // Convert the value to JsonElement
-                                row[columnName] = when (value) {
-                                    null -> JsonNull
-                                    is String -> JsonPrimitive(value)
-                                    is Number -> JsonPrimitive(value)
-                                    is Boolean -> JsonPrimitive(value)
-                                    else -> JsonPrimitive(value.toString())
-                                }
-                            }
-
-                            rows.add(row)
-                        }
-
-                        results.close()
-                        statement.close()
-
-                        // Now you have all rows in the 'rows' list, where each row is a Map of column names to values
-                        ConnectorLogger.logger.info("Query results: {}", rows)
-
-                        val rowSet = RowSet(
-                            rows = rows
-                        )
-
-                        QueryResponse(rowSets = listOf(rowSet))
-                    }
+                    QueryResponse(rowSets = listOf(rowSet))
                 }
             } finally {
                 connection.close()

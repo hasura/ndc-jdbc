@@ -1,5 +1,4 @@
 plugins {
-    alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
     id("com.github.johnrengelman.shadow") version "8.1.1"
     application
@@ -8,13 +7,6 @@ plugins {
 repositories {
     mavenCentral()
     google()
-    maven {
-        url = uri("https://maven.pkg.github.com/hasura/ndc-sdk-kotlin")
-        credentials {
-            username = System.getenv("GITHUB_USERNAME")
-            password = System.getenv("GITHUB_TOKEN")
-        }
-    }
     maven {
         url = uri("https://repo.jooq.org/repo")
         credentials {
@@ -26,12 +18,11 @@ repositories {
 
 dependencies {
     // Hasura NDC Kotlin SDK
-    implementation(libs.ndc.sdk.kotlin)
+    implementation(project(":ndc-sdk-kotlin"))
     implementation(project(":app"))
+    implementation(project(":bigquery"))
 
-    implementation(libs.arvo)
     implementation(libs.hikari)
-    implementation(libs.joda.time)
     implementation(libs.kotlinx.cli)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.logback.classic)

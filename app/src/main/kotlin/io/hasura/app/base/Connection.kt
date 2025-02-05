@@ -1,6 +1,6 @@
 package io.hasura.app.base
 
-import hasura.ndc.connector.*
+import io.hasura.ndc.connector.*
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import java.sql.Connection
@@ -9,7 +9,7 @@ interface DatabaseConnection {
     @Throws(ConnectorError::class)
     fun getConnection(): Connection
     fun close()
-    suspend fun <T> withConnection(block: (Connection) -> T): T
+    suspend fun <T> withConnection(block: suspend (Connection) -> T): T
 }
 
 abstract class BaseHikariConnection(protected val config: Configuration) : DatabaseConnection {
@@ -70,7 +70,7 @@ abstract class BaseHikariConnection(protected val config: Configuration) : Datab
         }
     }
 
-    override suspend fun <T> withConnection(block: (Connection) -> T): T {
+    override suspend fun <T> withConnection(block: suspend (Connection) -> T): T {
         val connection = getConnection()
         try {
             return block(connection)

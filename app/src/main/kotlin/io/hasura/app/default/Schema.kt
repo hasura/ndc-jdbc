@@ -1,7 +1,7 @@
 package io.hasura.app.default
 
 import io.hasura.app.base.*
-import hasura.ndc.ir.*
+import io.hasura.ndc.ir.*
 
 abstract class DefaultSchemaGeneratorClass<T : ColumnType> : ISchemaGenerator<DefaultConfiguration<T>> {
     override fun getSchema(configuration: DefaultConfiguration<T>): SchemaResponse {

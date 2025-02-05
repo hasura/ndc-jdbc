@@ -5,9 +5,16 @@ plugins {
 repositories {
     mavenCentral()
     google()
+    maven {
+        url = uri("https://maven.pkg.github.com/hasura/ndc-sdk-kotlin")
+        credentials {
+            username = System.getenv("GITHUB_USERNAME")
+            password = System.getenv("GITHUB_TOKEN")
+        }
+    }
 }
 
 dependencies {
     // Hasura NDC Kotlin SDK
-    implementation(project(":ndc-sdk-kotlin"))
+    implementation(libs.ndc.sdk.kotlin)
 }

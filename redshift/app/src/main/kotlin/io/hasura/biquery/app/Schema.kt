@@ -1,4 +1,4 @@
-package io.hasura.biquery.app
+package io.hasura.bigquery.app
 
 import io.hasura.app.default.*
 import hasura.ndc.ir.*
@@ -46,12 +46,15 @@ sealed class BigQueryType : ColumnType {
 @Serializable
 enum class BigQueryScalarType : ColumnType {
     // Scalar types
+    ANY,
+    BIGINT,
     BIGNUMERIC,
-    BOOL,
+    BOOLEAN,
     BYTES,
     DATE,
     DATETIME,
     FLOAT64,
+    FLOAT,
     GEOGRAPHY,
     INT64,
     JSON,
@@ -82,11 +85,14 @@ class BigQuerySchemaGenerator : DefaultSchemaGenerator<BigQueryType>() {
     ): ScalarType {
         val representationType = when (columnType) {
             is BigQueryType.ScalarType -> when (columnType.value) {
+                BigQueryScalarType.ANY -> null
                 BigQueryScalarType.STRING -> RepresentationType.TypeString
                 BigQueryScalarType.INT64 -> RepresentationType.Int64
                 BigQueryScalarType.FLOAT64 -> RepresentationType.Float64
+                BigQueryScalarType.FLOAT -> RepresentationType.Float64
+                BigQueryScalarType.BIGINT -> RepresentationType.Biginteger
                 BigQueryScalarType.NUMERIC, BigQueryScalarType.BIGNUMERIC -> RepresentationType.Bigdecimal
-                BigQueryScalarType.BOOL -> RepresentationType.TypeBoolean
+                BigQueryScalarType.BOOLEAN -> RepresentationType.TypeBoolean
                 BigQueryScalarType.DATE -> RepresentationType.Date
                 BigQueryScalarType.TIME -> RepresentationType.Timestamp
                 BigQueryScalarType.DATETIME, BigQueryScalarType.TIMESTAMP -> RepresentationType.Timestamp

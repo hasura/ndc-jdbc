@@ -1,9 +1,12 @@
 [versions]
+arvo-version = "1.12.0"
 hikari-version = "6.2.1"
+joda-time-version = "2.13.1"
 kotlin-version = "2.1.10"
 kotlinx-cli-version = "0.3.5"
 kotlinx-serialization-version = "1.8.0"
 logback-version = "1.5.15"
+ndc-sdk-kotlin-version = "1.0.0"
 opentelemetry-version = "1.46.0"
 semver4j-version = "3.1.0"
 vertx-version = "4.5.12"
@@ -16,10 +19,13 @@ oracle-jdbc-version = "23.6.0.24.10"
 redshift-jdbc-version = "2.1.0.32"
 
 [libraries]
+arvo = { module = "org.apache.avro:avro", version.ref = "arvo-version" }
 hikari = { module = "com.zaxxer:HikariCP", version.ref = "hikari-version" }
+joda-time = { module = "joda-time:joda-time", version.ref = "joda-time-version" }
 kotlinx-cli = { module = "org.jetbrains.kotlinx:kotlinx-cli", version.ref = "kotlinx-cli-version" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization-version" }
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback-version" }
+ndc-sdk-kotlin = { module = "io.hasura:ndc-sdk-kotlin", version.ref = "ndc-sdk-kotlin-version" }
 opentelemetry-api = { module = "io.opentelemetry:opentelemetry-api", version.ref = "opentelemetry-version" }
 opentelemetry-kotlin = { module = "io.opentelemetry:opentelemetry-extension-kotlin", version.ref = "opentelemetry-version" }
 opentelemetry-otlp = { module = "io.opentelemetry:opentelemetry-exporter-otlp", version.ref = "opentelemetry-version" }

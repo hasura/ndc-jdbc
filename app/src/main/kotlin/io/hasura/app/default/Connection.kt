@@ -1,6 +1,7 @@
 package io.hasura.app.default
 
 import io.hasura.app.base.*
+import io.hasura.ndc.connector.*
 import kotlinx.serialization.json.*
 
 interface QueryExecutor {
@@ -21,31 +22,33 @@ class DefaultConnection(
             val metaData = results.metaData
             val columnCount = metaData.columnCount
 
-            // Iterate over all rows
-            while (results.next()) {
-                val row = mutableMapOf<String, JsonElement>()
+            Telemetry.withActiveSpan("processResults") { span ->
+                // Iterate over all rows
+                while (results.next()) {
+                    val row = mutableMapOf<String, JsonElement>()
 
-                // Iterate over all columns in the current row
-                for (columnIndex in 1..columnCount) {
-                    val columnName = metaData.getColumnName(columnIndex)
-                    val value = results.getObject(columnIndex)
-                    // Convert the value to JsonElement
-                    row[columnName] = when (value) {
-                        null -> JsonNull
-                        is String -> JsonPrimitive(value)
-                        is Number -> JsonPrimitive(value)
-                        is Boolean -> JsonPrimitive(value)
-                        else -> JsonPrimitive(value.toString())
+                    // Iterate over all columns in the current row
+                    for (columnIndex in 1..columnCount) {
+                        val columnName = metaData.getColumnName(columnIndex)
+                        val value = results.getObject(columnIndex)
+                        // Convert the value to JsonElement
+                        row[columnName] = when (value) {
+                            null -> JsonNull
+                            is String -> JsonPrimitive(value)
+                            is Number -> JsonPrimitive(value)
+                            is Boolean -> JsonPrimitive(value)
+                            else -> JsonPrimitive(value.toString())
+                        }
                     }
+
+                    rows.add(row)
                 }
 
-                rows.add(row)
+                results.close()
+                statement.close()
             }
 
-            results.close()
-            statement.close()
-
-            rows
+            rows // Last expression in the lambda is the return value
         }
     }
 }

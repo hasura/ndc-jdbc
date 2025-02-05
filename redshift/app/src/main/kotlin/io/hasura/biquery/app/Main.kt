@@ -1,4 +1,4 @@
-package io.hasura.biquery.app
+package io.hasura.bigquery.app
 
 import hasura.ndc.connector.startServer
 import kotlinx.coroutines.runBlocking
