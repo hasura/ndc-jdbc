@@ -1,0 +1,196 @@
+package io.hasura.snowflake.cli
+
+import io.hasura.common.Category
+import io.hasura.common.Column
+import io.hasura.common.ColumnType
+import io.hasura.common.Configuration
+import io.hasura.common.ConnectionUri
+import io.hasura.common.DefaultConfiguration
+import io.hasura.common.ForeignKeyInfo
+import io.hasura.common.FunctionInfo
+import io.hasura.common.TableInfo
+import io.hasura.ndc.ir.json
+import io.hasura.snowflake.common.SnowflakeDataType
+import kotlinx.cli.*
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import org.jooq.DSLContext
+import org.jooq.impl.DSL
+import kotlin.system.exitProcess
+
+interface IConfigGenerator<T : Configuration, U : ColumnType> {
+    fun generateConfig(config: T): DefaultConfiguration<U>
+}
+
+data class SnowflakeConfiguration(
+    override val connectionUri: ConnectionUri,
+    val schemas: List<String> = emptyList()
+) : Configuration
+
+
+object SnowflakeConfigGenerator : IConfigGenerator<SnowflakeConfiguration, SnowflakeDataType> {
+
+    override fun generateConfig(config: SnowflakeConfiguration): DefaultConfiguration<SnowflakeDataType> {
+        val introspectionResult = introspectSchemas(config)
+
+        return DefaultConfiguration(
+            connectionUri = config.connectionUri,
+            tables = introspectionResult.tables,
+            functions = introspectionResult.functions,
+        )
+    }
+
+    data class IntrospectionResult(
+        val tables: List<TableInfo<SnowflakeDataType>> = emptyList(),
+        val functions: List<FunctionInfo> = emptyList()
+    )
+
+    @Serializable
+    data class RawForeignKeyConstraint(
+        val foreign_collection: List<String>,
+        val column_mapping: Map<String, String>
+    )
+
+    private fun introspectSchemas(config: SnowflakeConfiguration): IntrospectionResult {
+        val jdbcUrl = config.connectionUri.resolve()
+
+        val modifiedJdbcUrl = jdbcUrl.find { it == '?' }
+            ?.let { "$jdbcUrl&JDBC_QUERY_RESULT_FORMAT=JSON" }
+            ?: "$jdbcUrl?JDBC_QUERY_RESULT_FORMAT=JSON"
+
+        val ctx = DSL.using(modifiedJdbcUrl)
+
+        val database = ctx.fetchOne("SELECT CURRENT_DATABASE() AS DATABASE")
+            ?.get("DATABASE", String::class.java)
+            ?: throw Exception("Could not determine current database")
+
+        val schemaSelection = config.schemas.joinToString(", ") { "'$it'" }
+
+        ctx.fetch("SHOW PRIMARY KEYS IN DATABASE $database")
+        ctx.fetch("SHOW IMPORTED KEYS IN DATABASE $database")
+
+        //language=Snowflake
+        val sql = """
+        SELECT
+            array_construct(tables.TABLE_DATABASE, tables.TABLE_SCHEMA, tables.TABLE_NAME) AS TABLE_NAME,
+            tables.TABLE_TYPE,
+            tables.COMMENT as DESCRIPTION,
+            cols.COLUMNS,
+            pks.PK_COLUMNS,
+            fks.FOREIGN_KEYS
+        FROM (
+                SELECT CATALOG_NAME AS TABLE_DATABASE, db_tables.TABLE_SCHEMA, db_tables.TABLE_NAME, db_tables.COMMENT, db_tables.TABLE_TYPE
+                FROM INFORMATION_SCHEMA.TABLES AS db_tables
+                CROSS JOIN INFORMATION_SCHEMA.INFORMATION_SCHEMA_CATALOG_NAME
+                WHERE db_tables.TABLE_TYPE IN ('BASE TABLE', 'VIEW')
+                AND ${if (config.schemas.isEmpty()) "db_tables.TABLE_SCHEMA <> 'INFORMATION_SCHEMA'" else "db_tables.TABLE_SCHEMA IN ($schemaSelection)"}
+        ) tables
+        LEFT OUTER JOIN (
+            SELECT
+                columns.TABLE_SCHEMA,
+                columns.TABLE_NAME,
+                array_agg(object_construct(
+                    'name', columns.column_name,
+                    'description', columns.comment,
+                    'type', columns.data_type,
+                    'numeric_precision', columns.numeric_precision,
+                    'numeric_scale', columns.numeric_scale,
+                    'nullable', to_boolean(columns.is_nullable),
+                    'auto_increment', to_boolean(columns.is_identity)
+                )) as COLUMNS
+            FROM INFORMATION_SCHEMA.COLUMNS columns
+            GROUP BY columns.TABLE_SCHEMA, columns.TABLE_NAME
+        ) AS cols ON cols.TABLE_SCHEMA = tables.TABLE_SCHEMA AND cols.TABLE_NAME = tables.TABLE_NAME
+        LEFT OUTER JOIN (
+            SELECT
+                primary_keys."schema_name" AS TABLE_SCHEMA,
+                primary_keys."table_name" AS TABLE_NAME,
+                array_agg(primary_keys."column_name") WITHIN GROUP (ORDER BY primary_keys."key_sequence" ASC) AS PK_COLUMNS
+            FROM table(RESULT_SCAN(LAST_QUERY_ID(-2))) AS primary_keys
+            GROUP BY primary_keys."schema_name", primary_keys."table_name"
+        ) AS pks ON pks.TABLE_SCHEMA = tables.TABLE_SCHEMA AND pks.TABLE_NAME = tables.TABLE_NAME
+        LEFT OUTER JOIN (
+            SELECT
+                fks."fk_schema_name" AS TABLE_SCHEMA,
+                fks."fk_table_name" AS TABLE_NAME,
+                object_agg(
+                    fks."fk_name", to_variant(fks."constraint")
+                ) AS FOREIGN_KEYS
+            FROM (
+                SELECT
+                    foreign_keys."fk_schema_name",
+                    foreign_keys."fk_table_name",
+                    foreign_keys."fk_name",
+                    object_construct(
+                        'foreign_collection', array_construct(foreign_keys."pk_database_name", foreign_keys."pk_schema_name", foreign_keys."pk_table_name"),
+                        'column_mapping', object_agg(foreign_keys."fk_column_name", to_variant(foreign_keys."pk_column_name"))
+                    ) AS "constraint"
+                FROM table(RESULT_SCAN(LAST_QUERY_ID(-1))) AS foreign_keys
+                GROUP BY foreign_keys."fk_schema_name", foreign_keys."fk_table_name", foreign_keys."fk_name", foreign_keys."pk_database_name", foreign_keys."pk_schema_name", foreign_keys."pk_table_name"
+            ) AS fks
+            GROUP BY fks."fk_schema_name", fks."fk_table_name"
+        ) AS fks ON fks.TABLE_SCHEMA = tables.TABLE_SCHEMA AND fks.TABLE_NAME = tables.TABLE_NAME
+        """.trimIndent()
+
+        val tables = ctx.fetch(sql).map { row ->
+            val columns = row
+                .get("COLUMNS", String::class.java)
+                .let { json.decodeFromString<List<Column<SnowflakeDataType>>>(it) }
+
+            TableInfo<SnowflakeDataType>(
+                name = row.get("TABLE_NAME", List::class.java).joinToString("."),
+                category = when (val tableType = row.get("TABLE_TYPE", String::class.java)) {
+                    "BASE TABLE" -> Category.TABLE
+                    "VIEW" -> Category.VIEW
+                    else -> throw Exception("Unknown table type: $tableType")
+                },
+                description = row.get("DESCRIPTION", String::class.java),
+                columns = columns,
+                primaryKeys = columns.filter { it.isPrimaryKey == true }.map { it.name },
+                foreignKeys = row.get("FOREIGN_KEYS", String::class.java)
+                    ?.let {
+                        json.decodeFromString<Map<String, RawForeignKeyConstraint>>(it)
+                            .mapValues { (_, value) ->
+                                ForeignKeyInfo(
+                                    columnMapping = value.column_mapping,
+                                    foreignCollection = value.foreign_collection.joinToString(".")
+                                )
+                            }
+                    } ?: emptyMap()
+            )
+
+
+        }
+
+        return IntrospectionResult(tables = tables)
+    }
+}
+
+fun main(args: Array<String>) {
+    // Create kotlinx-cli which accepts "--jdbc-url" and "--schemas" as arguments
+    val parser = ArgParser("snowflake-cli")
+
+    val jdbcUrl by parser.option(ArgType.String, shortName = "j", fullName = "jdbc-url", description = "JDBC URL for Snowflake").required()
+    val schemas by parser.option(ArgType.String, shortName = "s", fullName = "schemas", description = "Comma-separated list of schemas to introspect")
+    val outfile by parser.option(ArgType.String, shortName = "o", fullName = "outfile", description = "Output file for generated configuration").default("configuration.json")
+
+    parser.parse(args)
+
+    val config = SnowflakeConfiguration(ConnectionUri(jdbcUrl), schemas?.split(",") ?: emptyList())
+    val generatedConfig = SnowflakeConfigGenerator.generateConfig(config)
+
+    // Write the generated configuration to the output file
+    val json = Json { prettyPrint = true }.encodeToString(generatedConfig)
+    println(json)
+
+    // Write the generated configuration to the output file
+    val file = java.io.File(outfile)
+    try {
+        file.writeText(json)
+    } catch (e: Exception) {
+        println("Failed to write configuration to file: ${e.message}")
+        exitProcess(1)
+    }
+
+    exitProcess(0)
+}

@@ -1,32 +1,8 @@
 package io.hasura.snowflake.app
 
-import io.hasura.app.base.*
 import io.hasura.app.default.*
 import io.hasura.ndc.ir.*
-import kotlinx.serialization.Serializable
-
-@Serializable
-enum class SnowflakeDataType : ColumnType {
-    ARRAY,
-    BINARY,
-    BOOLEAN,
-    DATE,
-    FLOAT,
-    GEOGRAPHY,
-    GEOMETRY,
-    NUMBER,
-    OBJECT,
-    TEXT,
-    TIME,
-    TIMESTAMP_LTZ,
-    TIMESTAMP_NTZ,
-    TIMESTAMP_TZ,
-    VARIANT,
-    VECTOR;
-
-    override val typeName: String
-        get() = toString()
-}
+import io.hasura.snowflake.common.SnowflakeDataType
 
 class SnowflakeSchemaGenerator : DefaultSchemaGenerator<SnowflakeDataType>() {
     override fun mapToTypeRepresentation(

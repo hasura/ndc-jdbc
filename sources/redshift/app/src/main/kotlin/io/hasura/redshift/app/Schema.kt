@@ -5,6 +5,7 @@ import io.hasura.app.default.*
 import io.hasura.ndc.ir.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
+import io.hasura.common.*
 
 @Serializable
 enum class RedshiftDataType : ColumnType {

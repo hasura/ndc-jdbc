@@ -2,6 +2,7 @@ package io.hasura.redshift.app
 
 import io.hasura.app.base.*
 import com.zaxxer.hikari.HikariConfig
+import io.hasura.common.*
 
 class RedshiftConnection(config: Configuration) : BaseHikariConnection(config) {
     override fun getDriverConfig(): DatabaseDriver {

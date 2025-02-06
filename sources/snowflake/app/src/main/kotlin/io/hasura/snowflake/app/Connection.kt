@@ -1,7 +1,7 @@
 package io.hasura.snowflake.app
 
 import io.hasura.app.base.*
-import com.zaxxer.hikari.HikariConfig
+import io.hasura.common.*
 
 class SnowflakeConnection(config: Configuration) : BaseHikariConnection(config) {
     override fun getDriverConfig(): DatabaseDriver {

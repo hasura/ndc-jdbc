@@ -9,6 +9,7 @@ dependencies {
     // Hasura NDC Kotlin SDK
     implementation(libs.ndc.sdk.kotlin)
     implementation(project(":app"))
+    implementation(project(":common"))
     implementation(project(":sources:redshift"))
 
     // Redshift JDBC driver

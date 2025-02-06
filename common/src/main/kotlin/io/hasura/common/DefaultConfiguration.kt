@@ -1,6 +1,6 @@
-package io.hasura.app.default
 
-import io.hasura.app.base.*
+package io.hasura.common
+
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -41,17 +41,17 @@ interface ColumnType {
 @Serializable
 data class Column<T : ColumnType>(
     val name: String,
-    val description: String?,
+    val description: String? = null,
     val type: T,
     @SerialName("numeric_precision")
-    val numericPrecision: Int?,
+    val numericPrecision: Int? = null,
     @SerialName("numeric_scale")
-    val numericScale: Int?,
+    val numericScale: Int? = null,
     val nullable: Boolean,
     @SerialName("auto_increment")
     val autoIncrement: Boolean,
     @SerialName("is_primarykey")
-    val isPrimaryKey: Boolean?
+    val isPrimaryKey: Boolean? = null,
 )
 
 // TODO: Not supported yet
@@ -73,7 +73,7 @@ data class ForeignKeyInfo(
 sealed class NativeOperation {
     @Serializable
     data class NativeQueries(val queries: Map<String, NativeOperationInfo>) : NativeOperation()
-    
+
     @Serializable
     data class NativeMutations(val mutations: Map<String, NativeOperationInfo>) : NativeOperation()
 }
@@ -90,7 +90,7 @@ data class NativeOperationInfo(
 sealed class NativeOperationSql {
     @Serializable
     data class Literal(val value: String) : NativeOperationSql()
-    
+
     @Serializable
     data class File(val file: String) : NativeOperationSql()
 }
@@ -108,7 +108,7 @@ sealed class NativeOperationType {
     @Serializable
     @SerialName("scalar_type")
     data class ScalarType(val value: String) : NativeOperationType()
-    
+
     @Serializable
     @SerialName("array_type")
     data class ArrayType(val value: NativeOperationType) : NativeOperationType()

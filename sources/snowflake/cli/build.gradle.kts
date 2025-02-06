@@ -8,14 +8,13 @@ plugins {
 dependencies {
     // Hasura NDC Kotlin SDK
     implementation(libs.ndc.sdk.kotlin)
-    implementation(project(":app"))
     implementation(project(":common"))
     implementation(project(":sources:snowflake"))
 
-    // Snowflake JDBC driver
-    implementation(libs.snowflake.jdbc)
+    implementation(libs.kotlinx.cli)
+    implementation(libs.kotlinx.serialization.json)
 
-    // Jooq
+    implementation(libs.snowflake.jdbc)
     implementation("org.jooq.pro:jooq:3.19.8")
 }
 
@@ -38,5 +37,5 @@ tasks.withType<Zip>().configureEach {
 }
 
 application {
-    mainClass.set("io.hasura.snowflake.app.MainKt")
+    mainClass.set("io.hasura.snowflake.cli.MainKt")
 }

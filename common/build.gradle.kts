@@ -3,9 +3,12 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-dependencies {
-    implementation(libs.ndc.sdk.kotlin)
-    implementation(project(":common"))
+repositories {
+    mavenCentral()
+}
 
+dependencies {
+    // Hasura NDC Kotlin SDK
+    implementation(libs.ndc.sdk.kotlin)
     implementation(libs.kotlinx.serialization.json)
 }
