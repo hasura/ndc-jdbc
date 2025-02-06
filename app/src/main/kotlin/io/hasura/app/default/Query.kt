@@ -3,7 +3,6 @@ package io.hasura.app.default
 import io.hasura.app.base.*
 import io.hasura.ndc.connector.*
 import io.hasura.ndc.ir.*
-import org.jooq.impl.DSL
 import org.jooq.SQLDialect
 import org.jooq.impl.DSL.*
 import org.jooq.Query as JooqQuery
@@ -14,7 +13,6 @@ import kotlinx.serialization.json.JsonArray
 
 const val variablesCTEName = "vars"
 const val resultsCTEName = "results"
-const val collectionName = "coll"
 const val variableName = "var"
 const val indexName = "idx"
 const val rowNumberName = "rn"
@@ -27,7 +25,7 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
     ): String {
         ConnectorLogger.logger.info("generateSql: $request")
 
-        val ctx = DSL.using(getDatabaseDialect(source))
+        val ctx = using(getDatabaseDialect(source))
 
         val query = when {
             request.variables.isNotEmpty() -> generateCTEQuery(ctx, request)
@@ -51,7 +49,7 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
             .with(resultsCTE)
             .select(fields)
             .from(resultsCTE)
-            .orderBy(DSL.field(DSL.name(indexName)))
+            .orderBy(field(name(indexName)))
 
         return sql
     }
@@ -61,43 +59,40 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
         request: QueryRequest,
     ): JooqQuery {
         val fields = getFieldSelects(request)
-        val sql = ctx
+        return ctx
             .select(fields)
-            .from(request.collection)
+            .from(name(request.collection))
+            .where(request.query.predicate?.let { generateCondition(it) })
+            .orderBy(
+                request.query.orderBy?.let { orderBy ->
+                    orderBy.elements.map { element ->
+                        when (val target = element.target) {
+                            is OrderByTarget.Column -> {
+                                if (target.path.isNotEmpty() || target.fieldPath != null) {
+                                    throw ConnectorError.NotSupported(
+                                        "Nested fields and relationships are not supported in order by"
+                                    )
+                                }
+                                when (element.orderDirection) {
+                                    OrderDirection.ASC -> field(name(target.name)).asc()
+                                    OrderDirection.DESC -> field(name(target.name)).desc()
+                                }
+                            }
 
-        request.query.orderBy?.let { orderBy ->
-            val orderFields = orderBy.elements.map { element ->
-                when (val target = element.target) {
-                    is OrderByTarget.Column -> {
-                        if (target.path.isNotEmpty() || target.fieldPath != null) {
-                            throw ConnectorError.NotSupported(
-                                "Nested fields and relationships are not supported in order by"
-                            )
-                        }
-                        when (element.orderDirection) {
-                            OrderDirection.ASC -> DSL.field(target.name).asc()
-                            OrderDirection.DESC -> DSL.field(target.name).desc()
+                            is OrderByTarget.SingleColumnAggregate,
+                            is OrderByTarget.StarCountAggregate -> {
+                                throw ConnectorError.NotSupported("Aggregate operations are not supported in order by")
+                            }
                         }
                     }
-                    is OrderByTarget.SingleColumnAggregate, 
-                    is OrderByTarget.StarCountAggregate -> {
-                        throw ConnectorError.NotSupported("Aggregate operations are not supported in order by")
-                    }
-                }
+                })
+            .apply {
+                request.query.limit?.let { limit(it.toInt()) }
+            }
+            .apply {
+                request.query.offset?.let { offset(it.toInt()) }
             }
 
-            request.query.predicate?.let { predicate ->
-                val condition = generateCondition(predicate)
-                sql.where(condition)
-            }
-
-            sql.orderBy(orderFields)
-        }
-
-        request.query.limit?.let { sql.limit(it.toInt()) }
-        request.query.offset?.let { sql.offset(it.toInt()) }
-
-        return sql
     }
 
     private fun getDatabaseDialect(type: DatabaseSource): SQLDialect = when (type) {
@@ -117,15 +112,14 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
     private fun buildVariablesCTE(
         request: QueryRequest,
     ): CommonTableExpression<Record> {
-        return DSL
-            .name(variablesCTEName)
+        return name(variablesCTEName)
             .`as`(
                 request.variables.mapIndexed { index, variable ->
-                    DSL.select(
+                    select(
                         *variable.map { (_, value) ->
-                            DSL.inline(convertJsonValue(ComparisonValue.Scalar(value))).`as`(variableName)
+                            inline(convertJsonValue(ComparisonValue.Scalar(value))).`as`(variableName)
                         }.toTypedArray(),
-                        DSL.inline(index).`as`(indexName)
+                        inline(index).`as`(indexName)
                     )
                 }.reduce { acc: SelectOrderByStep<Record>, select: SelectSelectStep<Record> ->
                     acc.unionAll(select)
@@ -138,22 +132,21 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
         varsCTE: CommonTableExpression<Record>
     ): CommonTableExpression<Record> {
         val fields = getFieldSelectsWithoutAlias(request)
-        return DSL
-            .name(resultsCTEName)
+        return name(resultsCTEName)
             .`as`(
-                DSL.select(
+                select(
                     *fields.toTypedArray() + arrayOf(
                         rowNumber()
                             .over()
-                            .partitionBy(DSL.field(DSL.name(indexName)))
-                            .orderBy(DSL.field(DSL.name(indexName)))
+                            .partitionBy(field(name(indexName)))
+                            .orderBy(field(name(indexName)))
                             .`as`(rowNumberName),
-                        DSL.field(DSL.name(indexName))
+                        field(name(indexName))
                     )
                 )
                 .from(request.collection)
                 .join(varsCTE)
-                .on(request.query.predicate?.let { generateCondition(it) } 
+                .on(request.query.predicate?.let { generateCondition(it) }
                     ?: throw ConnectorError.NotSupported("Predicate is required for variable queries")
                 )
             )
@@ -175,26 +168,26 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
         } ?: throw ConnectorError.NotSupported("No predicate comparison found")
 
     private fun generateCondition(expr: Expression): Condition = when (expr) {
-        is Expression.And -> 
-            DSL.and(expr.expressions.map { generateCondition(it) })
-        
-        is Expression.Or -> 
-            DSL.or(expr.expressions.map { generateCondition(it) })
-        
-        is Expression.Not -> 
-            DSL.not(generateCondition(expr.expression))
-        
+        is Expression.And ->
+            and(expr.expressions.map { generateCondition(it) })
+
+        is Expression.Or ->
+            or(expr.expressions.map { generateCondition(it) })
+
+        is Expression.Not ->
+            not(generateCondition(expr.expression))
+
         is Expression.UnaryComparisonOperator -> when (expr.operator) {
-            UnaryComparisonOperatorType.IS_NULL -> 
-                DSL.field(getColumnName(expr.column)).isNull
+            UnaryComparisonOperatorType.IS_NULL ->
+                field(getColumnName(expr.column)).isNull
         }
-        
+
         is Expression.BinaryComparisonOperator -> {
-            val field = DSL.field(getColumnName(expr.column))
+            val field = field(name(getColumnName(expr.column)))
             when (val value = expr.value) {
                 is ComparisonValue.Scalar -> {
                     val convertedValue = convertJsonValue(value)
-                    
+
                     when (expr.operator) {
                         "eq" -> field.eq(convertedValue)
                         "neq" -> field.ne(convertedValue)
@@ -209,16 +202,16 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
                         else -> throw ConnectorError.NotSupported("Unsupported operator: ${expr.operator}")
                     }
                 }
-                is ComparisonValue.Column -> 
+                is ComparisonValue.Column ->
                     throw ConnectorError.NotSupported("Column comparisons not supported yet")
                 is ComparisonValue.Variable -> {
-                    DSL.field(getColumnName(expr.column))
-                        .eq(DSL.field(DSL.name(variablesCTEName, variableName)))
+                    field(getColumnName(expr.column))
+                        .eq(field(name(variablesCTEName, variableName)))
                 }
             }
         }
-        
-        is Expression.Exists -> 
+
+        is Expression.Exists ->
             throw ConnectorError.NotSupported("Exists queries not supported yet")
     }
 
@@ -246,7 +239,7 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
         else -> primitive.content
     }
 
-    private fun convertJsonArray(array: JsonArray): List<Any> = 
+    private fun convertJsonArray(array: JsonArray): List<Any> =
         array.map { element ->
             when (element) {
                 is JsonPrimitive -> convertJsonPrimitive(element)
@@ -254,7 +247,7 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
             }
         }
 
-    private fun convertJsonValue(value: ComparisonValue.Scalar): Any = 
+    private fun convertJsonValue(value: ComparisonValue.Scalar): Any =
         when (val jsonElement = value.value) {
             is JsonPrimitive -> convertJsonPrimitive(jsonElement)
             is JsonArray -> convertJsonArray(jsonElement)
@@ -270,9 +263,9 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
             when (field) {
                 is Field.Column -> {
                     val columnRef = if (collection != null) {
-                        DSL.field("${collection}.${field.column}")
+                        field(name(collection,field.column))
                     } else {
-                        DSL.field(field.column)
+                        field(name(field.column))
                     }
                     if (applyAlias) {
                         columnRef.`as`(alias)
