@@ -11,6 +11,7 @@ import org.jooq.*
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonArray
 import io.hasura.common.*
+import kotlinx.serialization.json.JsonElement
 
 const val variablesCTEName = "vars"
 const val resultsCTEName = "results"
@@ -22,35 +23,33 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
     override fun generateQuery(
         source: DatabaseSource,
         configuration: DefaultConfiguration<T>,
-        request: QueryRequest
-    ): String {
-        ConnectorLogger.logger.info("generateSql: $request")
+        request: QueryRequest,
+    ): String = generateBaseQuery(source, request).toString()
 
+    override fun generateExplainQuery(
+        source: DatabaseSource,
+        configuration: DefaultConfiguration<T>,
+        request: QueryRequest,
+    ): String = "EXPLAIN ${generateBaseQuery(source, request)}"
+
+    private fun generateBaseQuery(
+        source: DatabaseSource,
+        request: QueryRequest,
+    ): JooqQuery {
         val ctx = using(getDatabaseDialect(source))
-
-        val query = when {
-            request.variables.isNotEmpty() -> generateCTEQuery(ctx, request)
+        return when {
+            request.variables.isNotEmpty() -> generateVariableQuery(ctx, request)
             else -> generateSingleQuery(ctx, request)
         }
-
-        ConnectorLogger.logger.info("SQL: ${query.toString()}")
-
-        return query.toString()
     }
 
-    fun generateCTEQuery(
+    fun generateVariableQuery(
         ctx: DSLContext,
         request: QueryRequest,
     ): JooqQuery {
         val varsCTE = buildVariablesCTE(request)
         val resultsCTE = buildResultsCTE(request, varsCTE)
-        val fields = getFieldSelects(request)
-        return ctx
-            .with(varsCTE)
-            .with(resultsCTE)
-            .select(fields)
-            .from(resultsCTE)
-            .orderBy(field(name(indexName)))
+        return buildFinalVariableQuery(ctx, request, varsCTE, resultsCTE)
     }
 
     fun generateSingleQuery(
@@ -58,7 +57,7 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
         request: QueryRequest,
     ): JooqQuery = ctx
         .select(getFieldSelects(request))
-        .from(name(request.collection))
+        .from(name(request.collection.split(".")))
         .where(getPredicate(request))
         .orderBy(getOrderByFields(request))
         .limit(request.query.limit?.toInt())
@@ -77,24 +76,6 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
     private fun getFieldSelectsWithoutAlias(
         request: QueryRequest,
     ): List<JooqField<*>> = getFieldSelectsHelper(request, false)
-
-    private fun buildVariablesCTE(
-        request: QueryRequest,
-    ): CommonTableExpression<Record> {
-        return name(variablesCTEName)
-            .`as`(
-                request.variables.mapIndexed { index, variable ->
-                    select(
-                        *variable.map { (_, value) ->
-                            inline(convertJsonValue(ComparisonValue.Scalar(value))).`as`(variableName)
-                        }.toTypedArray(),
-                        inline(index).`as`(indexName)
-                    )
-                }.reduce { acc: SelectOrderByStep<Record>, select: SelectSelectStep<Record> ->
-                    acc.unionAll(select)
-                }
-            )
-    }
 
     private fun getPredicate(
         request: QueryRequest,
@@ -171,30 +152,62 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
         }?: emptyList()
     }
 
+    private fun buildVariablesCTE(
+        request: QueryRequest,
+    ): CommonTableExpression<Record> {
+        return name(variablesCTEName)
+            .`as`(
+                request.variables.mapIndexed { index, variableMap ->
+                    select(
+                        *createVariableFields(variableMap),
+                        inline(index).`as`(indexName)
+                    )
+                }.reduce { acc: SelectOrderByStep<Record>, select: SelectSelectStep<Record> ->
+                    acc.unionAll(select)
+                }
+            )
+    }
+
+    private fun createVariableFields(variableMap: Map<String, JsonElement>): Array<JooqField<*>> {
+        return variableMap.map { (_, value) ->
+            inline(convertJsonValue(ComparisonValue.Scalar(value))).`as`(variableName)
+        }.toTypedArray()
+    }
+
     private fun buildResultsCTE(
         request: QueryRequest,
         varsCTE: CommonTableExpression<Record>
     ): CommonTableExpression<Record> {
-        val fields = getFieldSelectsWithoutAlias(request)
         return name(resultsCTEName)
-            .`as`(
-                select(
-                    *fields.toTypedArray() + arrayOf(
-                        rowNumber()
-                            .over()
-                            .partitionBy(field(name(indexName)))
-                            .orderBy(field(name(indexName)))
-                            .`as`(rowNumberName),
-                        field(name(indexName))
-                    )
-                )
-                .from(request.collection)
-                .join(varsCTE)
-                .on(request.query.predicate?.let { generateCondition(it) }
-                    ?: throw ConnectorError.NotSupported("Predicate is required for variable queries")
-                )
-            )
+            .`as`(buildResultsCTEQuery(request, varsCTE))
     }
+
+    private fun buildResultsCTEQuery(
+        request: QueryRequest,
+        varsCTE: CommonTableExpression<Record>
+    ): SelectJoinStep<Record> {
+        val fields = getFieldSelectsWithoutAlias(request)
+        
+        return select(
+            *fields.toTypedArray() + buildPartitionFields()
+        )
+        .from(name(request.collection.split(".")))
+        .join(varsCTE)
+        .on(getVariablePredicate(request))
+    }
+
+    private fun buildPartitionFields(): Array<JooqField<*>> = arrayOf(
+        rowNumber()
+            .over()
+            .partitionBy(field(name(variableName)))
+            .orderBy(inline(1))
+            .`as`(rowNumberName),
+        field(name(indexName))
+    )
+
+    private fun getVariablePredicate(request: QueryRequest): Condition =
+        request.query.predicate?.let { generateCondition(it) }
+            ?: throw ConnectorError.NotSupported("Predicate is required for variable queries")
 
     private fun getVariableJoinColumn(request: QueryRequest): String =
         request.query.predicate?.let { predicate ->
@@ -225,6 +238,59 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
             target.name
         }
     }
+
+    private fun buildFinalVariableQuery(
+        ctx: DSLContext,
+        request: QueryRequest,
+        varsCTE: CommonTableExpression<Record>,
+        resultsCTE: CommonTableExpression<Record>
+    ): JooqQuery {
+        val fields = getFieldSelects(request)
+        val baseQuery = buildBaseQuery(ctx, fields, varsCTE, resultsCTE)
+        return baseQuery
+            .let { applyVariableLimitOffset(it, request) }
+            .let { applyVariableOrdering(it, request) }
+    }
+
+    private fun buildBaseQuery(
+        ctx: DSLContext,
+        fields: List<JooqField<*>>,
+        varsCTE: CommonTableExpression<Record>,
+        resultsCTE: CommonTableExpression<Record>
+    ): SelectWhereStep<Record> = ctx
+        .with(varsCTE)
+        .with(resultsCTE)
+        .select(
+            *fields.toTypedArray() +
+            arrayOf(
+                field(name(indexName))
+            )
+        )
+        .from(resultsCTE)
+
+    private fun applyVariableLimitOffset(
+        query: SelectWhereStep<Record>,
+        request: QueryRequest
+    ): SelectWhereStep<Record> {
+        request.query.offset?.let { offset ->
+            query.where(field(name(rowNumberName)).gt(inline(offset.toInt())))
+        }
+        
+        request.query.limit?.let { limit ->
+            val effectiveLimit = (limit.toInt()) + (request.query.offset?.toInt() ?: 0)
+            query.where(field(name(rowNumberName)).le(inline(effectiveLimit)))
+        }
+        
+        return query
+    }
+
+    private fun applyVariableOrdering(
+        query: SelectWhereStep<Record>,
+        request: QueryRequest
+    ): SelectSeekStepN<Record> = query.orderBy(
+        listOf(field(name(indexName))) +
+        getOrderByFields(request)
+    )
 
     private fun convertJsonPrimitive(primitive: JsonPrimitive): Any = when {
         primitive.isString -> primitive.content

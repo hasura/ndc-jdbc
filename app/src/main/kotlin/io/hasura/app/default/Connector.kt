@@ -57,7 +57,7 @@ class DefaultConnector<T : ColumnType>(
     }
 
     override suspend fun getSchema(configuration: DefaultConfiguration<T>): SchemaResponse {
-        return Telemetry.withActiveSpan("getSchema") { span ->
+        return Telemetry.withActiveSpan("getSchema") { _ ->
             schemaGenerator.getSchema(configuration)
         }
     }
@@ -81,21 +81,33 @@ class DefaultConnector<T : ColumnType>(
         state: DefaultState<T>,
         request: QueryRequest
     ): QueryResponse {
-        return Telemetry.withActiveSpan("acquireDatabaseConnection") { span ->
+        return Telemetry.withActiveSpan("acquireDatabaseConnection") { _ ->
             val connection = state.client.getConnection()
             try {
-                Telemetry.withActiveSpan("queryDatabase") { span ->
+                Telemetry.withActiveSpan("queryDatabase") { _ ->
                     val query: DefaultQuery<T> = DefaultQuery()
                     val queryExecutor = DefaultConnection(state.client)
                     val rows = queryExecutor.executeQuery(
                         query.generateQuery(source, configuration, request)
                     )
 
-                    val rowSet = RowSet(
-                        rows = rows
-                    )
+                    if (request.variables.isNotEmpty()) {
+                        val groupedRows = rows.groupBy { row ->
+                            (row.get(indexName) as JsonPrimitive).content.toInt()
+                        }
+                        val rowSets = request.variables.indices.map { varIndex ->
+                            val variableRows = groupedRows[varIndex]?.map { row ->
+                                row.filterKeys { it != indexName }
+                            } ?: emptyList()
+                            RowSet(rows = variableRows)
+                        }
 
-                    QueryResponse(rowSets = listOf(rowSet))
+                        QueryResponse(rowSets = rowSets)
+                    } else {
+                        val rowSet = RowSet(rows = rows)
+
+                        QueryResponse(rowSets = listOf(rowSet))
+                    }
                 }
             } finally {
                 connection.close()
@@ -108,7 +120,7 @@ class DefaultConnector<T : ColumnType>(
         state: DefaultState<T>,
         request: MutationRequest
     ): ExplainResponse {
-        return Telemetry.withActiveSpan("mutationExplain") { span ->
+        return Telemetry.withActiveSpan("mutationExplain") { _ ->
             ExplainResponse(
                 details = mapOf(
                     "plan" to "Jdbc mutation plan"
@@ -122,7 +134,7 @@ class DefaultConnector<T : ColumnType>(
         state: DefaultState<T>,
         request: MutationRequest
     ): MutationResponse {
-        return Telemetry.withActiveSpan("mutation") { span ->
+        return Telemetry.withActiveSpan("mutation") { _ ->
             MutationResponse(
                 operationResults = listOf(
                     MutationOperationResults.Procedure(
