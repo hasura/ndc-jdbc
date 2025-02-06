@@ -44,20 +44,19 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
         val varsCTE = buildVariablesCTE(request)
         val resultsCTE = buildResultsCTE(request, varsCTE)
         val fields = getFieldSelects(request)
-        var sql = ctx
+        return ctx
             .with(varsCTE)
             .with(resultsCTE)
             .select(fields)
             .from(resultsCTE)
             .orderBy(field(name(indexName)))
-
-        return sql
     }
 
     fun generateSingleQuery(
         ctx: DSLContext,
         request: QueryRequest,
-    ): JooqQuery = ctx.select(getFieldSelects(request))
+    ): JooqQuery = ctx
+        .select(getFieldSelects(request))
         .from(name(request.collection))
         .where(getPredicate(request))
         .orderBy(getOrderByFields(request))
