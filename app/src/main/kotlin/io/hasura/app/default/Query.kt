@@ -123,7 +123,7 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
                 request.variables.mapIndexed { index, variable ->
                     DSL.select(
                         *variable.map { (_, value) ->
-                            DSL.inline(value).`as`(variableName)
+                            DSL.inline(convertJsonValue(ComparisonValue.Scalar(value))).`as`(variableName)
                         }.toTypedArray(),
                         DSL.inline(index).`as`(indexName)
                     )
@@ -213,7 +213,7 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
                     throw ConnectorError.NotSupported("Column comparisons not supported yet")
                 is ComparisonValue.Variable -> {
                     DSL.field(getColumnName(expr.column))
-                        .eq(DSL.field("${DSL.name(variablesCTEName)}.${DSL.name(variableName)}"))
+                        .eq(DSL.field(DSL.name(variablesCTEName, variableName)))
                 }
             }
         }
