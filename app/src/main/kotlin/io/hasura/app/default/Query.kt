@@ -189,13 +189,13 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
                     val convertedValue = convertJsonValue(value)
 
                     when (expr.operator) {
-                        "eq" -> field.eq(convertedValue)
-                        "neq" -> field.ne(convertedValue)
-                        "gt" -> field.gt(convertedValue)
-                        "lt" -> field.lt(convertedValue)
-                        "gte" -> field.ge(convertedValue)
-                        "lte" -> field.le(convertedValue)
-                        "in" -> when (convertedValue) {
+                        "_eq" -> field.eq(convertedValue)
+                        "_neq" -> field.ne(convertedValue)
+                        "_gt" -> field.gt(convertedValue)
+                        "_lt" -> field.lt(convertedValue)
+                        "_gte" -> field.ge(convertedValue)
+                        "_lte" -> field.le(convertedValue)
+                        "_in" -> when (convertedValue) {
                             is List<*> -> field.`in`(convertedValue)
                             else -> throw ConnectorError.NotSupported("IN operator requires an array value")
                         }
