@@ -1,3 +1,6 @@
 rootProject.name = "ndc-jdbc"
-include(":ndc-sdk-kotlin")
-project(":ndc-sdk-kotlin").projectDir = file("../ndc-sdk-kotlin/sdk")
+
+include(":app")
+include(":sources:bigquery", ":sources:bigquery:app", ":sources:bigquery:cli")
+include(":sources:snowflake", ":sources:snowflake:app", ":sources:snowflake:cli")
+include(":sources:redshift", ":sources:redshift:app", ":sources:redshift:cli")
