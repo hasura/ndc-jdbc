@@ -120,13 +120,7 @@ class DefaultConnector<T : ColumnType>(
         state: DefaultState<T>,
         request: MutationRequest
     ): ExplainResponse {
-        return Telemetry.withActiveSpan("mutationExplain") { _ ->
-            ExplainResponse(
-                details = mapOf(
-                    "plan" to "Jdbc mutation plan"
-                )
-            )
-        }
+        throw UnsupportedOperationException("Mutation explain is not supported")
     }
 
     override suspend fun mutation(
@@ -134,14 +128,6 @@ class DefaultConnector<T : ColumnType>(
         state: DefaultState<T>,
         request: MutationRequest
     ): MutationResponse {
-        return Telemetry.withActiveSpan("mutation") { _ ->
-            MutationResponse(
-                operationResults = listOf(
-                    MutationOperationResults.Procedure(
-                        result = JsonPrimitive("Mutation result")
-                    )
-                )
-            )
-        }
+        throw UnsupportedOperationException("Mutation is not supported")
     }
 }
