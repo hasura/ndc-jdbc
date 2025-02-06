@@ -28,6 +28,7 @@ dependencies {
     // Hasura NDC Kotlin SDK
     implementation(libs.ndc.sdk.kotlin)
     implementation(project(":app"))
+    implementation(project(":bigquery"))
 
     implementation(libs.arvo)
     implementation(libs.hikari)

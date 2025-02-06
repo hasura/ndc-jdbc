@@ -90,9 +90,6 @@ class DefaultConnector<T : ColumnType>(
                         query.generateQuery(source, configuration, request)
                     )
 
-                    // Now you have all rows in the 'rows' list, where each row is a Map of column names to values
-                    ConnectorLogger.logger.info("Query results: {}", rows)
-
                     val rowSet = RowSet(
                         rows = rows
                     )
