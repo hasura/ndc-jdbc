@@ -57,43 +57,12 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
     fun generateSingleQuery(
         ctx: DSLContext,
         request: QueryRequest,
-    ): JooqQuery {
-        val fields = getFieldSelects(request)
-        return ctx
-            .select(fields)
-            .from(name(request.collection))
-            .where(request.query.predicate?.let { generateCondition(it) })
-            .orderBy(
-                request.query.orderBy?.let { orderBy ->
-                    orderBy.elements.map { element ->
-                        when (val target = element.target) {
-                            is OrderByTarget.Column -> {
-                                if (target.path.isNotEmpty() || target.fieldPath != null) {
-                                    throw ConnectorError.NotSupported(
-                                        "Nested fields and relationships are not supported in order by"
-                                    )
-                                }
-                                when (element.orderDirection) {
-                                    OrderDirection.ASC -> field(name(target.name)).asc()
-                                    OrderDirection.DESC -> field(name(target.name)).desc()
-                                }
-                            }
-
-                            is OrderByTarget.SingleColumnAggregate,
-                            is OrderByTarget.StarCountAggregate -> {
-                                throw ConnectorError.NotSupported("Aggregate operations are not supported in order by")
-                            }
-                        }
-                    }
-                })
-            .apply {
-                request.query.limit?.let { limit(it.toInt()) }
-            }
-            .apply {
-                request.query.offset?.let { offset(it.toInt()) }
-            }
-
-    }
+    ): JooqQuery = ctx.select(getFieldSelects(request))
+        .from(name(request.collection))
+        .where(getPredicate(request))
+        .orderBy(getOrderByFields(request))
+        .limit(request.query.limit?.toInt())
+        .offset(request.query.offset?.toInt())
 
     private fun getDatabaseDialect(type: DatabaseSource): SQLDialect = when (type) {
         DatabaseSource.SNOWFLAKE -> SQLDialect.SNOWFLAKE
@@ -127,45 +96,9 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
             )
     }
 
-    private fun buildResultsCTE(
+    private fun getPredicate(
         request: QueryRequest,
-        varsCTE: CommonTableExpression<Record>
-    ): CommonTableExpression<Record> {
-        val fields = getFieldSelectsWithoutAlias(request)
-        return name(resultsCTEName)
-            .`as`(
-                select(
-                    *fields.toTypedArray() + arrayOf(
-                        rowNumber()
-                            .over()
-                            .partitionBy(field(name(indexName)))
-                            .orderBy(field(name(indexName)))
-                            .`as`(rowNumberName),
-                        field(name(indexName))
-                    )
-                )
-                .from(request.collection)
-                .join(varsCTE)
-                .on(request.query.predicate?.let { generateCondition(it) }
-                    ?: throw ConnectorError.NotSupported("Predicate is required for variable queries")
-                )
-            )
-    }
-
-    private fun getVariableJoinColumn(request: QueryRequest): String =
-        request.query.predicate?.let { predicate ->
-            when (predicate) {
-                is Expression.BinaryComparisonOperator -> {
-                    val value = predicate.value
-                    if (value is ComparisonValue.Variable) {
-                        value.name
-                    } else {
-                        throw ConnectorError.NotSupported("Predicate must use a variable comparison")
-                    }
-                }
-                else -> throw ConnectorError.NotSupported("Predicate must be a binary comparison")
-            }
-        } ?: throw ConnectorError.NotSupported("No predicate comparison found")
+    ): Condition = request.query.predicate?.let { generateCondition(it) } ?: noCondition()
 
     private fun generateCondition(expr: Expression): Condition = when (expr) {
         is Expression.And ->
@@ -214,6 +147,69 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
         is Expression.Exists ->
             throw ConnectorError.NotSupported("Exists queries not supported yet")
     }
+
+    private fun getOrderByFields(
+        request: QueryRequest,
+    ): List<SortField<*>> {
+        return request.query.orderBy?.elements?.map { element ->
+            when (val target = element.target) {
+                is OrderByTarget.Column -> {
+                    if (target.path.isNotEmpty() || target.fieldPath != null) {
+                        throw ConnectorError.NotSupported("Nested fields and relationships are not supported in order by")
+                    }
+                    when (element.orderDirection) {
+                        OrderDirection.ASC -> field(name(target.name)).asc()
+                        OrderDirection.DESC -> field(name(target.name)).desc()
+                    }
+                }
+
+                is OrderByTarget.SingleColumnAggregate,
+                is OrderByTarget.StarCountAggregate -> {
+                    throw ConnectorError.NotSupported("Aggregate operations are not supported in order by")
+                }
+            }
+        }?: emptyList()
+    }
+
+    private fun buildResultsCTE(
+        request: QueryRequest,
+        varsCTE: CommonTableExpression<Record>
+    ): CommonTableExpression<Record> {
+        val fields = getFieldSelectsWithoutAlias(request)
+        return name(resultsCTEName)
+            .`as`(
+                select(
+                    *fields.toTypedArray() + arrayOf(
+                        rowNumber()
+                            .over()
+                            .partitionBy(field(name(indexName)))
+                            .orderBy(field(name(indexName)))
+                            .`as`(rowNumberName),
+                        field(name(indexName))
+                    )
+                )
+                .from(request.collection)
+                .join(varsCTE)
+                .on(request.query.predicate?.let { generateCondition(it) }
+                    ?: throw ConnectorError.NotSupported("Predicate is required for variable queries")
+                )
+            )
+    }
+
+    private fun getVariableJoinColumn(request: QueryRequest): String =
+        request.query.predicate?.let { predicate ->
+            when (predicate) {
+                is Expression.BinaryComparisonOperator -> {
+                    val value = predicate.value
+                    if (value is ComparisonValue.Variable) {
+                        value.name
+                    } else {
+                        throw ConnectorError.NotSupported("Predicate must use a variable comparison")
+                    }
+                }
+                else -> throw ConnectorError.NotSupported("Predicate must be a binary comparison")
+            }
+        } ?: throw ConnectorError.NotSupported("No predicate comparison found")
 
     private fun getColumnName(target: ComparisonTarget): String = when (target) {
         is ComparisonTarget.Column -> {
