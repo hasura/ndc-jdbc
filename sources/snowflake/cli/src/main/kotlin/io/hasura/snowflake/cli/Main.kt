@@ -167,35 +167,62 @@ object SnowflakeConfigGenerator : IConfigGenerator<SnowflakeConfiguration, Snowf
     }
 }
 
-fun main(args: Array<String>) {
-    // Create kotlinx-cli which accepts "--jdbc-url", "--schemas", and "--outfile" as arguments
-    val parser = ArgParser("snowflake-cli")
+@OptIn(ExperimentalCli::class)
+class UpdateCommand : Subcommand("update", "Update configuration file") {
+    private val jdbcUrl by option(
+        ArgType.String,
+        shortName = "j",
+        fullName = "jdbc-url",
+        description = "JDBC URL or environment variable for Snowflake connection"
+    ).required()
 
-    val jdbcUrl by parser.option(ArgType.String, shortName = "j", fullName = "jdbc-url", description = "JDBC url or environment variable for Snowflake connection").required()
-    val schemas by parser.option(ArgType.String, shortName = "s", fullName = "schemas", description = "Comma-separated list of schemas to introspect")
-    val outfile by parser.option(ArgType.String, shortName = "o", fullName = "outfile", description = "Output file for generated configuration").default("configuration.json")
+    private val schemas by option(
+        ArgType.String,
+        shortName = "s",
+        fullName = "schemas",
+        description = "Comma-separated list of schemas to introspect"
+    )
 
-    parser.parse(args)
+    private val outfile by option(
+        ArgType.String,
+        shortName = "o",
+        fullName = "outfile",
+        description = "Output file for generated configuration"
+    ).default("configuration.json")
 
-    val connectionUri = if (System.getenv(jdbcUrl) != null) {
-        ConnectionUri(variable = jdbcUrl)
-    } else {
-        ConnectionUri(value = jdbcUrl)
+    override fun execute() {
+        val connectionUri = if (System.getenv(jdbcUrl) != null) {
+            ConnectionUri(variable = jdbcUrl)
+        } else {
+            ConnectionUri(value = jdbcUrl)
+        }
+        val config = SnowflakeConfiguration(connectionUri, schemas?.split(",") ?: emptyList())
+        val generatedConfig = SnowflakeConfigGenerator.generateConfig(config)
+
+        // Use the shared Json formatter
+        val json = SnowflakeConfigGenerator.jsonFormatter.encodeToString(generatedConfig)
+
+        // Write the generated configuration to the output file
+        val file = java.io.File(outfile)
+        try {
+            file.writeText(json)
+        } catch (e: Exception) {
+            println("Failed to write configuration to file: ${e.message}")
+            exitProcess(1)
+        }
+
+        exitProcess(0)
     }
-    val config = SnowflakeConfiguration(connectionUri, schemas?.split(",") ?: emptyList())
-    val generatedConfig = SnowflakeConfigGenerator.generateConfig(config)
+}
 
-    // Use the shared Json formatter
-    val json = SnowflakeConfigGenerator.jsonFormatter.encodeToString(generatedConfig)
+fun main(args: Array<String>) {
+    val parser = ArgParser("update", strictSubcommandOptionsOrder = true)
+    parser.subcommands(UpdateCommand())
 
-    // Write the generated configuration to the output file
-    val file = java.io.File(outfile)
-    try {
-        file.writeText(json)
-    } catch (e: Exception) {
-        println("Failed to write configuration to file: ${e.message}")
+    if (args.isEmpty()) {
+        println("Subcommand is required (ex: update)")
         exitProcess(1)
     }
 
-    exitProcess(0)
+    parser.parse(args)
 }
