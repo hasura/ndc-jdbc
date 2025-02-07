@@ -29,7 +29,8 @@ data class SnowflakeConfiguration(
 
 
 object SnowflakeConfigGenerator : IConfigGenerator<SnowflakeConfiguration, SnowflakeDataType> {
-
+    val jsonFormatter = Json { prettyPrint = true }
+    
     override fun generateConfig(config: SnowflakeConfiguration): DefaultConfiguration<SnowflakeDataType> {
         val introspectionResult = introspectSchemas(config)
 
@@ -167,21 +168,25 @@ object SnowflakeConfigGenerator : IConfigGenerator<SnowflakeConfiguration, Snowf
 }
 
 fun main(args: Array<String>) {
-    // Create kotlinx-cli which accepts "--jdbc-url" and "--schemas" as arguments
+    // Create kotlinx-cli which accepts "--jdbc-url", "--schemas", and "--outfile" as arguments
     val parser = ArgParser("snowflake-cli")
 
-    val jdbcUrl by parser.option(ArgType.String, shortName = "j", fullName = "jdbc-url", description = "JDBC URL for Snowflake").required()
+    val jdbcUrl by parser.option(ArgType.String, shortName = "j", fullName = "jdbc-url", description = "JDBC url or environment variable for Snowflake connection").required()
     val schemas by parser.option(ArgType.String, shortName = "s", fullName = "schemas", description = "Comma-separated list of schemas to introspect")
     val outfile by parser.option(ArgType.String, shortName = "o", fullName = "outfile", description = "Output file for generated configuration").default("configuration.json")
 
     parser.parse(args)
 
-    val config = SnowflakeConfiguration(ConnectionUri(jdbcUrl), schemas?.split(",") ?: emptyList())
+    val connectionUri = if (System.getenv(jdbcUrl) != null) {
+        ConnectionUri(variable = jdbcUrl)
+    } else {
+        ConnectionUri(value = jdbcUrl)
+    }
+    val config = SnowflakeConfiguration(connectionUri, schemas?.split(",") ?: emptyList())
     val generatedConfig = SnowflakeConfigGenerator.generateConfig(config)
 
-    // Write the generated configuration to the output file
-    val json = Json { prettyPrint = true }.encodeToString(generatedConfig)
-    println(json)
+    // Use the shared Json formatter
+    val json = SnowflakeConfigGenerator.jsonFormatter.encodeToString(generatedConfig)
 
     // Write the generated configuration to the output file
     val file = java.io.File(outfile)
