@@ -91,23 +91,31 @@ class DefaultConnector<T : ColumnType>(
                         query.generateQuery(source, configuration, request)
                     )
 
-                    if (request.variables.isNotEmpty()) {
+                    val aggregates = request.query.aggregates?.let {
+                            JsonObject( queryExecutor.executeQuery(
+                                    query.generateAggregateQuery(source, it, request.collection)
+                                )
+                                .first()
+                            )
+                        }
+
+                    val rowSets =if (request.variables.isNotEmpty()) {
                         val groupedRows = rows.groupBy { row ->
                             (row.get(indexName) as JsonPrimitive).content.toInt()
                         }
-                        val rowSets = request.variables.indices.map { varIndex ->
+                        request.variables.indices.map { varIndex ->
                             val variableRows = groupedRows[varIndex]?.map { row ->
                                 row.filterKeys { it != indexName }
                             } ?: emptyList()
                             RowSet(rows = variableRows)
                         }
 
-                        QueryResponse(rowSets = rowSets)
                     } else {
-                        val rowSet = RowSet(rows = rows)
-
-                        QueryResponse(rowSets = listOf(rowSet))
+                        val rowSet = RowSet(rows = rows, aggregates = aggregates)
+                        listOf(rowSet)
                     }
+
+                    QueryResponse(rowSets = rowSets )
                 }
             } finally {
                 connection.close()
