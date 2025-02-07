@@ -1,4 +1,4 @@
-package io.hasura.app.base
+package io.hasura.common
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -10,7 +10,7 @@ data class ConnectionUri(
 ) {
     fun resolve(): String = when {
         value != null -> value
-        variable != null -> System.getenv(variable) 
+        variable != null -> System.getenv(variable)
             ?: throw IllegalStateException("Environment variable $variable not found")
         else -> throw IllegalStateException("Either value or variable must be set")
     }

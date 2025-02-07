@@ -1,6 +1,7 @@
 package io.hasura.bigquery.app
 
 import io.hasura.app.base.*
+import io.hasura.common.*
 
 class BigQueryConnection(config: Configuration) : BaseHikariConnection(config) {
     override fun getDriverConfig(): DatabaseDriver {

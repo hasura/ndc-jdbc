@@ -2,6 +2,7 @@ package io.hasura.bigquery.app
 
 import io.hasura.app.base.*
 import io.hasura.app.default.*
+import io.hasura.common.*
 import io.hasura.ndc.connector.*
 import kotlinx.serialization.builtins.serializer
 

@@ -3,6 +3,7 @@ package io.hasura.app.base
 import io.hasura.ndc.connector.*
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
+import io.hasura.common.*
 import java.sql.Connection
 
 interface DatabaseConnection {

@@ -1,5 +1,6 @@
 package io.hasura.bigquery.app
 
+import io.hasura.common.*
 import io.hasura.app.base.*
 import io.hasura.app.default.*
 import io.hasura.ndc.ir.*

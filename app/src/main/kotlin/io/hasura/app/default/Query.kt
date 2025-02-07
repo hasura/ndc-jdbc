@@ -10,6 +10,7 @@ import org.jooq.Field as JooqField
 import org.jooq.*
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonArray
+import io.hasura.common.*
 
 const val variablesCTEName = "vars"
 const val resultsCTEName = "results"

@@ -8,6 +8,7 @@ import kotlinx.serialization.json.*
 import java.nio.file.Path
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
+import io.hasura.common.*
 
 class DefaultState<T : ColumnType>(
     val configuration: DefaultConfiguration<T>,
