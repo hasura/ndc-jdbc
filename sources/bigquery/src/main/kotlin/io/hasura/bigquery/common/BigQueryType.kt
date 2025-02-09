@@ -1,50 +1,65 @@
 package io.hasura.bigquery.common
 
 import io.hasura.common.ColumnType
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonClassDiscriminator
+import kotlinx.serialization.*
+import kotlinx.serialization.json.*
 
-@OptIn(ExperimentalSerializationApi::class)
-@Serializable
-@JsonClassDiscriminator("type")
+@Serializable(BigQueryTypeSerializer::class)
 sealed class BigQueryType : ColumnType {
     @Serializable
-    @SerialName("scalar_type")
     data class ScalarType(
-        val value: BigQueryScalarType
+        @SerialName("scalar_type")
+        val scalarType: BigQueryScalarType
     ) : BigQueryType()
 
     @Serializable
-    @SerialName("array_type")
     data class ArrayType(
-        val value: BigQueryType
+        @SerialName("array_type")
+        val arrayType: BigQueryType
     ) : BigQueryType()
 
     @Serializable
-    @SerialName("range_type")
     data class RangeType(
-        val value: BigQueryRangeDataType
+        @SerialName("range_type")
+        val rangeType: BigQueryRangeDataType
     ) : BigQueryType()
 
     @Serializable
-    @SerialName("struct_type")
     data class StructType(
-        val fields: Map<String, BigQueryType>
+        @SerialName("struct_type")
+        val structType: Map<String, BigQueryType>
     ) : BigQueryType()
 
     override val typeName: String
         get() = when (this) {
-            is ScalarType -> value.toString()
+            is ScalarType -> scalarType.toString()
             is ArrayType -> "array"
             is RangeType -> "range"
             is StructType -> "struct"
         }
 }
 
+object BigQueryTypeSerializer : JsonContentPolymorphicSerializer<BigQueryType>(
+    BigQueryType::class,
+) {
+    override fun selectDeserializer(
+        element: JsonElement,
+    ): DeserializationStrategy<BigQueryType> {
+        val jsonObject = element.jsonObject
+        return when {
+            jsonObject.containsKey("scalar_type") -> BigQueryType.ScalarType.serializer()
+            jsonObject.containsKey("array_type") -> BigQueryType.ArrayType.serializer()
+            jsonObject.containsKey("range_type") -> BigQueryType.RangeType.serializer()
+            jsonObject.containsKey("struct_type") -> BigQueryType.StructType.serializer()
+            else -> throw IllegalArgumentException(
+                "Unsupported BigQueryType type.",
+            )
+        }
+    }
+}
+
 @Serializable
-enum class BigQueryScalarType : ColumnType {
+enum class BigQueryScalarType {
     // Scalar types
     ANY,
     BIGINT,
@@ -61,18 +76,12 @@ enum class BigQueryScalarType : ColumnType {
     NUMERIC,
     STRING,
     TIME,
-    TIMESTAMP;
-
-    override val typeName: String
-        get() = toString()
+    TIMESTAMP
 }
 
 @Serializable
-enum class BigQueryRangeDataType : ColumnType {
+enum class BigQueryRangeDataType {
     DATE,
     DATETIME,
-    TIMESTAMP;
-
-    override val typeName: String
-        get() = toString()
+    TIMESTAMP
 }

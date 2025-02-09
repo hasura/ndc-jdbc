@@ -60,17 +60,12 @@ object BigQueryConfigGenerator : IConfigGenerator<BigQueryConfiguration, BigQuer
     data class QueryColumnType(
         val scalarType: String? = null,
         val arrayType: ArrayType? = null,
-        val rangeType: RangeType? = null,
+        val rangeType: String? = null,
         val structType: Map<String, QueryColumnType>? = null
     )
 
     @Serializable
     data class ArrayType(
-        val scalarType: String
-    )
-
-    @Serializable
-    data class RangeType(
         val scalarType: String
     )
 
@@ -301,7 +296,6 @@ object BigQueryConfigGenerator : IConfigGenerator<BigQueryConfiguration, BigQuer
             )
         }
 
-        println("Introspection result: $introspectionResultTables")
         return IntrospectionResult(tables = introspectionResultTables)
     }
 
@@ -317,7 +311,7 @@ object BigQueryConfigGenerator : IConfigGenerator<BigQueryConfiguration, BigQuer
             }
             queryColumnType.rangeType != null -> {
                 val rangeType = queryColumnType.rangeType
-                BigQueryType.RangeType(BigQueryRangeDataType.valueOf(rangeType.scalarType.uppercase()))
+                BigQueryType.RangeType(BigQueryRangeDataType.valueOf(rangeType.uppercase()))
             }
             queryColumnType.structType != null -> {
                 val structType = queryColumnType.structType
