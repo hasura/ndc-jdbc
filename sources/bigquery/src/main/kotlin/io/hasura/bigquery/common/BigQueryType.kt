@@ -6,28 +6,45 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonClassDiscriminator
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
-data class BigQueryType(
+@JsonClassDiscriminator("type")
+sealed class BigQueryType : ColumnType {
+    @Serializable
     @SerialName("scalar_type")
-    val scalarType: BigQueryScalarType? = null,
+    data class ScalarType(
+        val value: BigQueryScalarType
+    ) : BigQueryType()
+
+    @Serializable
     @SerialName("array_type")
-    val arrayType: BigQueryType? = null,
+    data class ArrayType(
+        val value: BigQueryType
+    ) : BigQueryType()
+
+    @Serializable
     @SerialName("range_type")
-    val rangeType: BigQueryRangeDataType? = null,
+    data class RangeType(
+        val value: BigQueryRangeDataType
+    ) : BigQueryType()
+
+    @Serializable
     @SerialName("struct_type")
-    val structType: Map<String, BigQueryType>? = null
-) : ColumnType {
+    data class StructType(
+        val fields: Map<String, BigQueryType>
+    ) : BigQueryType()
+
     override val typeName: String
-        get() = when {
-            scalarType != null -> scalarType.toString()
-            arrayType != null -> "array"
-            structType != null -> "struct"
-            rangeType != null -> "range"
-            else -> throw IllegalStateException("Invalid BigQueryType")
+        get() = when (this) {
+            is ScalarType -> value.toString()
+            is ArrayType -> "array"
+            is RangeType -> "range"
+            is StructType -> "struct"
         }
 }
 
-enum class BigQueryScalarType {
+@Serializable
+enum class BigQueryScalarType : ColumnType {
     // Scalar types
     ANY,
     BIGINT,
@@ -44,11 +61,18 @@ enum class BigQueryScalarType {
     NUMERIC,
     STRING,
     TIME,
-    TIMESTAMP
+    TIMESTAMP;
+
+    override val typeName: String
+        get() = toString()
 }
 
-enum class BigQueryRangeDataType {
+@Serializable
+enum class BigQueryRangeDataType : ColumnType {
     DATE,
     DATETIME,
-    TIMESTAMP
+    TIMESTAMP;
+
+    override val typeName: String
+        get() = toString()
 }

@@ -11,8 +11,8 @@ class BigQuerySchemaGenerator : DefaultSchemaGenerator<BigQueryType>() {
         numericPrecision: Int?,
         numericScale: Int?
     ): ScalarType {
-        val representationType = when {
-            columnType.scalarType != null -> when (columnType.scalarType) {
+        val representationType = when (columnType) {
+            is BigQueryType.ScalarType -> when (columnType.value) {
                 BigQueryScalarType.ANY -> null
                 BigQueryScalarType.STRING -> RepresentationType.TypeString
                 BigQueryScalarType.INT64 -> RepresentationType.Int64
@@ -27,12 +27,10 @@ class BigQuerySchemaGenerator : DefaultSchemaGenerator<BigQueryType>() {
                 BigQueryScalarType.BYTES -> RepresentationType.Bytes
                 BigQueryScalarType.GEOGRAPHY -> RepresentationType.Geography
                 BigQueryScalarType.JSON -> RepresentationType.JSON
-                else -> null
             }
-            columnType.arrayType != null -> RepresentationType.JSON
-            columnType.rangeType != null -> RepresentationType.JSON
-            columnType.structType != null -> RepresentationType.JSON
-            else -> null
+            is BigQueryType.ArrayType -> RepresentationType.JSON
+            is BigQueryType.RangeType -> RepresentationType.JSON
+            is BigQueryType.StructType -> RepresentationType.JSON
         }
         
         return createScalarType(representationType, columnType.typeName)
