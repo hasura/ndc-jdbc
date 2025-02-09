@@ -6,45 +6,28 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonClassDiscriminator
 
-@OptIn(ExperimentalSerializationApi::class)
 @Serializable
-@JsonClassDiscriminator("type")
-sealed class BigQueryType : ColumnType {
-    @Serializable
+data class BigQueryType(
     @SerialName("scalar_type")
-    data class ScalarType(
-        val value: BigQueryScalarType
-    ) : BigQueryType()
-
-    @Serializable
+    val scalarType: BigQueryScalarType? = null,
     @SerialName("array_type")
-    data class ArrayType(
-        val value: BigQueryType
-    ) : BigQueryType()
-
-    @Serializable
+    val arrayType: BigQueryType? = null,
     @SerialName("range_type")
-    data class RangeType(
-        val value: BigQueryRangeDataType
-    ) : BigQueryType()
-
-    @Serializable
+    val rangeType: BigQueryRangeDataType? = null,
     @SerialName("struct_type")
-    data class StructType(
-        val fields: Map<String, BigQueryType>
-    ) : BigQueryType()
-
+    val structType: Map<String, BigQueryType>? = null
+) : ColumnType {
     override val typeName: String
-        get() = when (this) {
-            is ScalarType -> value.toString()
-            is ArrayType -> "array"
-            is RangeType -> "range"
-            is StructType -> "struct"
+        get() = when {
+            scalarType != null -> scalarType.toString()
+            arrayType != null -> "array"
+            structType != null -> "struct"
+            rangeType != null -> "range"
+            else -> throw IllegalStateException("Invalid BigQueryType")
         }
 }
 
-@Serializable
-enum class BigQueryScalarType : ColumnType {
+enum class BigQueryScalarType {
     // Scalar types
     ANY,
     BIGINT,
@@ -61,18 +44,11 @@ enum class BigQueryScalarType : ColumnType {
     NUMERIC,
     STRING,
     TIME,
-    TIMESTAMP;
-
-    override val typeName: String
-        get() = toString()
+    TIMESTAMP
 }
 
-@Serializable
-enum class BigQueryRangeDataType : ColumnType {
+enum class BigQueryRangeDataType {
     DATE,
     DATETIME,
-    TIMESTAMP;
-
-    override val typeName: String
-        get() = toString()
+    TIMESTAMP
 }

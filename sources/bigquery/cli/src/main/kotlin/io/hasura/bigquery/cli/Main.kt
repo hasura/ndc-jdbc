@@ -1,8 +1,6 @@
 package io.hasura.bigquery.cli
 
-import io.hasura.bigquery.common.BigQueryRangeDataType
-import io.hasura.bigquery.common.BigQueryScalarType
-import io.hasura.bigquery.common.BigQueryType
+import io.hasura.bigquery.common.*
 import io.hasura.common.Category
 import io.hasura.common.Column
 import io.hasura.common.ColumnType
@@ -59,19 +57,9 @@ object BigQueryConfigGenerator : IConfigGenerator<BigQueryConfiguration, BigQuer
     @Serializable
     data class QueryColumnType(
         val scalarType: String? = null,
-        val arrayType: ArrayType? = null,
-        val rangeType: RangeType? = null,
+        val arrayType: QueryColumnType? = null,
+        val rangeType: String? = null,
         val structType: Map<String, QueryColumnType>? = null
-    )
-
-    @Serializable
-    data class ArrayType(
-        val scalarType: String
-    )
-
-    @Serializable
-    data class RangeType(
-        val scalarType: String
     )
 
     @Serializable
@@ -301,7 +289,6 @@ object BigQueryConfigGenerator : IConfigGenerator<BigQueryConfiguration, BigQuer
             )
         }
 
-        println("Introspection result: $introspectionResultTables")
         return IntrospectionResult(tables = introspectionResultTables)
     }
 
@@ -309,31 +296,27 @@ object BigQueryConfigGenerator : IConfigGenerator<BigQueryConfiguration, BigQuer
         return when {
             queryColumnType.scalarType != null -> {
                 val scalarType = queryColumnType.scalarType
-                BigQueryType.ScalarType(BigQueryScalarType.valueOf(scalarType.uppercase()))
+                BigQueryType(scalarType = BigQueryScalarType.valueOf(scalarType.uppercase()))
             }
             queryColumnType.arrayType != null -> {
                 val arrayType = queryColumnType.arrayType
-                BigQueryType.ArrayType(mapToBigQueryType(arrayType))
+                BigQueryType(arrayType = mapToBigQueryType(arrayType))
             }
             queryColumnType.rangeType != null -> {
                 val rangeType = queryColumnType.rangeType
-                BigQueryType.RangeType(BigQueryRangeDataType.valueOf(rangeType.scalarType.uppercase()))
+                BigQueryType(rangeType = BigQueryRangeDataType.valueOf(rangeType.uppercase()))
             }
             queryColumnType.structType != null -> {
                 val structType = queryColumnType.structType
                 val fields = structType.mapValues { (_, value) -> mapToBigQueryType(value) }
-                BigQueryType.StructType(fields)
+                BigQueryType(structType = fields)
             }
             else -> throw IllegalArgumentException("Invalid QueryColumnType")
         }
     }
 
-    private fun mapToBigQueryType(arrayType: ArrayType): BigQueryType {
-        return BigQueryType.ArrayType(mapToBigQueryType(arrayType.scalarType))
-    }
-
     private fun mapToBigQueryType(scalarType: String): BigQueryType {
-        return BigQueryType.ScalarType(BigQueryScalarType.valueOf(scalarType.uppercase()))
+        return BigQueryType(scalarType = BigQueryScalarType.valueOf(scalarType.uppercase()))
     }
 
 }
