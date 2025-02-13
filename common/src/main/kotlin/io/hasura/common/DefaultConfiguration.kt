@@ -43,10 +43,6 @@ data class Column<T : ColumnType>(
     val name: String,
     val description: String? = null,
     val type: T,
-    @SerialName("numeric_precision")
-    val numericPrecision: Int? = null,
-    @SerialName("numeric_scale")
-    val numericScale: Int? = null,
     val nullable: Boolean,
     @SerialName("auto_increment")
     val autoIncrement: Boolean,

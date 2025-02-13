@@ -4,7 +4,8 @@ plugins {
 }
 
 dependencies {
-    // Hasura NDC Kotlin SDK
     implementation(libs.ndc.sdk.kotlin)
     implementation(project(":common"))
+
+    implementation(libs.kotlinx.serialization.json)
 }

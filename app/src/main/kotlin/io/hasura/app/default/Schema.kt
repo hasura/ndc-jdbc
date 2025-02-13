@@ -3,6 +3,9 @@ package io.hasura.app.default
 import io.hasura.app.base.*
 import io.hasura.ndc.ir.*
 import io.hasura.common.*
+import org.jooq.DataType
+import org.jooq.Field as JooqField
+import org.jooq.impl.SQLDataType
 
 abstract class DefaultSchemaGeneratorClass<T : ColumnType> : ISchemaGenerator<DefaultConfiguration<T>> {
     override fun getSchema(configuration: DefaultConfiguration<T>): SchemaResponse {
@@ -18,10 +21,12 @@ abstract class DefaultSchemaGeneratorClass<T : ColumnType> : ISchemaGenerator<De
     abstract fun getScalars(configuration: DefaultConfiguration<T>): Map<String, ScalarType>
     
     abstract fun mapToTypeRepresentation(
-        columnType: T,
-        numericPrecision: Int?,
-        numericScale: Int?
+        columnType: T
     ): ScalarType
+
+    abstract fun mapColumnDataTypeToSQLDataType(
+        columnType: T,
+    ): DataType<out Any>
 
     abstract fun mapAggregateFunctions(
         columnTypeStr: String,
@@ -32,6 +37,11 @@ abstract class DefaultSchemaGeneratorClass<T : ColumnType> : ISchemaGenerator<De
         columnTypeStr: String,
         representation: TypeRepresentation?
     ): Map<String, ComparisonOperatorDefinition>
+
+    abstract fun castToSQLDataType(
+        field: JooqField<*>,
+        columnType: T
+    ): JooqField<*>
     
     open fun getCollections(configuration: DefaultConfiguration<T>): List<CollectionInfo> {
         return configuration.tables.map { table ->
@@ -84,7 +94,7 @@ abstract class DefaultSchemaGenerator<T : ColumnType> : DefaultSchemaGeneratorCl
     override fun getScalars(configuration: DefaultConfiguration<T>): Map<String, ScalarType> {
         val scalarTypes = configuration.tables.flatMap { table ->
             table.columns.map { column ->
-                column.type to mapToTypeRepresentation(column.type, column.numericPrecision, column.numericScale)
+                column.type to mapToTypeRepresentation(column.type)
             }
         }.distinct()
         return scalarTypes.associate { (columnType, representation) ->
