@@ -12,12 +12,14 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonArray
 import io.hasura.common.*
 import kotlinx.serialization.json.JsonElement
+import org.jooq.impl.SQLDataType
 
 const val variablesCTEName = "vars"
 const val resultsCTEName = "results"
 const val variableName = "var"
 const val indexName = "idx"
 const val rowNumberName = "rn"
+
 
 class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
     override fun generateQuery(
@@ -62,6 +64,21 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
         .orderBy(getOrderByFields(request))
         .limit(request.query.limit?.toInt())
         .offset(request.query.offset?.toInt())
+
+    fun generateAggregateQuery(
+        source: DatabaseSource,
+        request: QueryRequest,
+    ): String {
+        val ctx = using(getDatabaseDialect(source))
+        return ctx
+            .select(translateIRAggregateFields(request.query.aggregates!!))
+            .from(name(request.collection.split(".")))
+            .where(getPredicate(request))
+            .orderBy(getOrderByFields(request))
+            .limit(request.query.limit?.toInt())
+            .offset(request.query.offset?.toInt())
+            .toString()
+    }
 
     private fun getDatabaseDialect(type: DatabaseSource): SQLDialect = when (type) {
         DatabaseSource.SNOWFLAKE -> SQLDialect.SNOWFLAKE
@@ -187,7 +204,7 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
         varsCTE: CommonTableExpression<Record>
     ): SelectJoinStep<Record> {
         val fields = getFieldSelectsWithoutAlias(request)
-        
+
         return select(
             *fields.toTypedArray() + buildPartitionFields()
         )
@@ -275,12 +292,12 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
         request.query.offset?.let { offset ->
             query.where(field(name(rowNumberName)).gt(inline(offset.toInt())))
         }
-        
+
         request.query.limit?.let { limit ->
             val effectiveLimit = (limit.toInt()) + (request.query.offset?.toInt() ?: 0)
             query.where(field(name(rowNumberName)).le(inline(effectiveLimit)))
         }
-        
+
         return query
     }
 
@@ -338,4 +355,39 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
                 else -> throw ConnectorError.NotSupported("Unsupported: Relationships are not supported")
             }
         } ?: emptyList()
+
+
+
+    private fun translateIRAggregateField(field: Aggregate): AggregateFunction<*> {
+        return when (field) {
+            is Aggregate.StarCount -> count()
+            is Aggregate.ColumnCount ->
+                if (field.distinct)
+                    countDistinct(field(name(field.column)))
+                else
+                    count(field(name(field.column)))
+
+            is Aggregate.SingleColumn -> {
+                val jooqField =
+                    field(name(field.column), SQLDataType.NUMERIC)
+                when (field.function.lowercase()) {
+                    "avg" -> avg(jooqField)
+                    "sum" -> sum(jooqField)
+                    "min" -> min(jooqField)
+                    "max" -> max(jooqField)
+                    "stddev_pop" -> stddevPop(jooqField)
+                    "stddev_samp" -> stddevSamp(jooqField)
+                    "var_pop" -> varPop(jooqField)
+                    "var_samp" -> varSamp(jooqField)
+                    else -> throw ConnectorError.NotSupported("Unsupported aggregate function: ${field.function}")
+                }
+            }
+        }
+    }
+
+    private fun translateIRAggregateFields(fields: Map<String, Aggregate>): List<org.jooq.Field<*>> {
+        return fields.map { (alias, field) ->
+            translateIRAggregateField(field).`as`(alias)
+        }
+    }
 }
