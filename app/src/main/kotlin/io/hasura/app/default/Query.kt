@@ -67,13 +67,16 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
 
     fun generateAggregateQuery(
         source: DatabaseSource,
-        aggregates: Map<String, Aggregate>,
-        collection: String
+        request: QueryRequest,
     ): String {
         val ctx = using(getDatabaseDialect(source))
         return ctx
-            .select(translateIRAggregateFields(aggregates))
-            .from(name(collection.split(".")))
+            .select(translateIRAggregateFields(request.query.aggregates!!))
+            .from(name(request.collection.split(".")))
+            .where(getPredicate(request))
+            .orderBy(getOrderByFields(request))
+            .limit(request.query.limit?.toInt())
+            .offset(request.query.offset?.toInt())
             .toString()
     }
 

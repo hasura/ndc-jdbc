@@ -92,16 +92,14 @@ class DefaultConnector<T : ColumnType>(
                     )
 
                     val aggregates = request.query.aggregates?.let {
-                            JsonObject( queryExecutor.executeQuery(
-                                    query.generateAggregateQuery(source, it, request.collection)
-                                )
-                                .first()
-                            )
-                        }
+                        queryExecutor.executeQuery(
+                            query.generateAggregateQuery(source, request)
+                        ).firstOrNull()?.let { JsonObject(it) }
+                    }
 
                     val rowSets =if (request.variables.isNotEmpty()) {
                         val groupedRows = rows.groupBy { row ->
-                            (row.get(indexName) as JsonPrimitive).content.toInt()
+                            (row[indexName] as JsonPrimitive).content.toInt()
                         }
                         request.variables.indices.map { varIndex ->
                             val variableRows = groupedRows[varIndex]?.map { row ->
