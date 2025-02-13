@@ -9,6 +9,7 @@ import java.nio.file.Path
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import io.hasura.common.*
+import kotlinx.coroutines.*
 
 class DefaultState<T : ColumnType>(
     val configuration: DefaultConfiguration<T>,
@@ -85,39 +86,52 @@ class DefaultConnector<T : ColumnType>(
             val connection = state.client.getConnection()
             try {
                 Telemetry.withActiveSpan("queryDatabase") { _ ->
-                    val query: DefaultQuery<T> = DefaultQuery()
-                    val queryExecutor = DefaultConnection(state.client)
-                    val rows = queryExecutor.executeQuery(
-                        query.generateQuery(source, configuration, request)
-                    )
+                    coroutineScope {
+                        val query: DefaultQuery<T> = DefaultQuery()
+                        val queryExecutor = DefaultConnection(state.client)
 
-                    val aggregates = request.query.aggregates?.let {
-                        queryExecutor.executeQuery(
-                            query.generateAggregateQuery(source, request)
-                        ).firstOrNull()?.let { JsonObject(it) }
-                    }
-
-                    val rowSets =if (request.variables.isNotEmpty()) {
-                        val groupedRows = rows.groupBy { row ->
-                            (row[indexName] as JsonPrimitive).content.toInt()
-                        }
-                        request.variables.indices.map { varIndex ->
-                            val variableRows = groupedRows[varIndex]?.map { row ->
-                                row.filterKeys { it != indexName }
-                            } ?: emptyList()
-                            RowSet(rows = variableRows)
+                        val rowsAsync = async {
+                            queryExecutor.executeQuery(
+                                query.generateQuery(source, configuration, request)
+                            )
                         }
 
-                    } else {
-                        val rowSet = RowSet(rows = rows, aggregates = aggregates)
-                        listOf(rowSet)
+
+                        val aggregatesAsync = request.query.aggregates?.let {
+                            async {
+                                queryExecutor.executeQuery(
+                                    query.generateAggregateQuery(source, request)
+                                ).firstOrNull()?.let { JsonObject(it) }
+                            }
+                        }
+
+                        val rows = rowsAsync.await()
+                        val aggregates = aggregatesAsync?.await()
+
+
+                        val rowSets = if (request.variables.isNotEmpty()) {
+                            val groupedRows = rows.groupBy { row ->
+                                (row[indexName] as JsonPrimitive).content.toInt()
+                            }
+                            request.variables.indices.map { varIndex ->
+                                val variableRows = groupedRows[varIndex]?.map { row ->
+                                    row.filterKeys { it != indexName }
+                                } ?: emptyList()
+                                RowSet(rows = variableRows)
+                            }
+
+                        } else {
+                            val rowSet = RowSet(rows = rows, aggregates = aggregates)
+                            listOf(rowSet)
+                        }
+
+                        QueryResponse(rowSets = rowSets)
+                    }}
+
+                    } finally {
+                        connection.close()
                     }
 
-                    QueryResponse(rowSets = rowSets )
-                }
-            } finally {
-                connection.close()
-            }
         }
     }
 
