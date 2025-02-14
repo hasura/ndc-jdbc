@@ -118,7 +118,7 @@ class DefaultQuery<T : ColumnType>(
 
         is Expression.UnaryComparisonOperator -> when (expr.operator) {
             UnaryComparisonOperatorType.IS_NULL ->
-                field(getColumnName(expr.column)).isNull
+                field(name(getColumnName(expr.column))).isNull
         }
 
         is Expression.BinaryComparisonOperator -> {
@@ -144,7 +144,7 @@ class DefaultQuery<T : ColumnType>(
                 is ComparisonValue.Column ->
                     throw ConnectorError.NotSupported("Column comparisons not supported yet")
                 is ComparisonValue.Variable -> {
-                    field(getColumnName(expr.column))
+                    field(name(getColumnName(expr.column)))
                         .eq(field(name(variablesCTEName, variableName)))
                 }
             }
