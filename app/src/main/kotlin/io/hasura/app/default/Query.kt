@@ -1,17 +1,18 @@
 package io.hasura.app.default
 
 import io.hasura.app.base.*
+import io.hasura.common.*
 import io.hasura.ndc.connector.*
 import io.hasura.ndc.ir.*
-import org.jooq.SQLDialect
-import org.jooq.impl.DSL.*
-import org.jooq.Query as JooqQuery
-import org.jooq.Field as JooqField
-import org.jooq.*
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonArray
-import io.hasura.common.*
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import org.jooq.*
+import org.jooq.Field as JooqField
+import org.jooq.Query as JooqQuery
+import org.jooq.SQLDialect
+import org.jooq.impl.DSL
+import org.jooq.impl.DSL.*
 import org.jooq.impl.SQLDataType
 
 const val variablesCTEName = "vars"
@@ -20,17 +21,18 @@ const val variableName = "var"
 const val indexName = "idx"
 const val rowNumberName = "rn"
 
-
-class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
+class DefaultQuery<T : ColumnType>(
+    private val configuration: DefaultConfiguration<T>,
+    private val state: DefaultState<T>,
+    private val schemaGenerator: DefaultSchemaGeneratorClass<T>
+) : DatabaseQuery<DefaultConfiguration<T>> {
     override fun generateQuery(
         source: DatabaseSource,
-        configuration: DefaultConfiguration<T>,
         request: QueryRequest,
     ): String = generateBaseQuery(source, request).toString()
 
     override fun generateExplainQuery(
         source: DatabaseSource,
-        configuration: DefaultConfiguration<T>,
         request: QueryRequest,
     ): String = "EXPLAIN ${generateBaseQuery(source, request)}"
 
@@ -39,10 +41,14 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
         request: QueryRequest,
     ): JooqQuery {
         val ctx = using(getDatabaseDialect(source))
-        return when {
+        val sql = when {
             request.variables.isNotEmpty() -> generateVariableQuery(ctx, request)
             else -> generateSingleQuery(ctx, request)
         }
+
+        ConnectorLogger.logger.debug("Generated sql: ${sql}")
+
+        return sql
     }
 
     fun generateVariableQuery(
@@ -58,7 +64,11 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
         ctx: DSLContext,
         request: QueryRequest,
     ): JooqQuery = ctx
-        .select(getFieldSelects(request))
+        .select(
+            getFieldSelects(request)
+                .withCasts(request.collection)
+                .withAliases()
+        )
         .from(name(request.collection.split(".")))
         .where(getPredicate(request))
         .orderBy(getOrderByFields(request))
@@ -86,14 +96,6 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
         DatabaseSource.REDSHIFT -> SQLDialect.REDSHIFT
     }
 
-    private fun getFieldSelects(
-        request: QueryRequest,
-    ): List<JooqField<*>> = getFieldSelectsHelper(request, true)
-
-    private fun getFieldSelectsWithoutAlias(
-        request: QueryRequest,
-    ): List<JooqField<*>> = getFieldSelectsHelper(request, false)
-
     private fun getPredicate(
         request: QueryRequest,
     ): Condition = request.query.predicate?.let { generateCondition(it) } ?: noCondition()
@@ -110,7 +112,7 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
 
         is Expression.UnaryComparisonOperator -> when (expr.operator) {
             UnaryComparisonOperatorType.IS_NULL ->
-                field(getColumnName(expr.column)).isNull
+                field(name(getColumnName(expr.column))).isNull
         }
 
         is Expression.BinaryComparisonOperator -> {
@@ -136,7 +138,7 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
                 is ComparisonValue.Column ->
                     throw ConnectorError.NotSupported("Column comparisons not supported yet")
                 is ComparisonValue.Variable -> {
-                    field(getColumnName(expr.column))
+                    field(name(getColumnName(expr.column)))
                         .eq(field(name(variablesCTEName, variableName)))
                 }
             }
@@ -203,14 +205,13 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
         request: QueryRequest,
         varsCTE: CommonTableExpression<Record>
     ): SelectJoinStep<Record> {
-        val fields = getFieldSelectsWithoutAlias(request)
-
-        return select(
-            *fields.toTypedArray() + buildPartitionFields()
-        )
-        .from(name(request.collection.split(".")))
-        .join(varsCTE)
-        .on(getVariablePredicate(request))
+        val fields = getFieldSelects(request).map { it.field }.toTypedArray()
+        val partitionFields = buildPartitionFields()
+        
+        return select(*(fields + partitionFields))
+            .from(name(request.collection.split(".")))
+            .join(varsCTE)
+            .on(getVariablePredicate(request))
     }
 
     private fun buildPartitionFields(): Array<JooqField<*>> = arrayOf(
@@ -263,6 +264,8 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
         resultsCTE: CommonTableExpression<Record>
     ): JooqQuery {
         val fields = getFieldSelects(request)
+            .withCasts(request.collection)
+            .withAliases()
         val baseQuery = buildBaseQuery(ctx, fields, varsCTE, resultsCTE)
         return baseQuery
             .let { applyVariableLimitOffset(it, request) }
@@ -333,30 +336,34 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
             else -> jsonElement.toString()
         }
 
-    private fun getFieldSelectsHelper(
-        request: QueryRequest,
-        applyAlias: Boolean = true,
-        collection: String? = null
-    ): List<JooqField<*>> =
+    private data class FieldWithAlias(
+        val field: JooqField<*>,
+        val alias: String
+    )
+
+    private fun getFieldSelects(
+        request: QueryRequest
+    ): List<FieldWithAlias> =
         request.query.fields?.map { (alias, field) ->
             when (field) {
-                is Field.Column -> {
-                    val columnRef = if (collection != null) {
-                        field(name(collection,field.column))
-                    } else {
-                        field(name(field.column))
-                    }
-                    if (applyAlias) {
-                        columnRef.`as`(alias)
-                    } else {
-                        columnRef
-                    }
-                }
+                is Field.Column -> FieldWithAlias(
+                    field = field(name(field.column)),
+                    alias = alias
+                )
                 else -> throw ConnectorError.NotSupported("Unsupported: Relationships are not supported")
             }
         } ?: emptyList()
+    
+    private fun List<FieldWithAlias>.withCasts(collection: String): List<FieldWithAlias> =
+        map { fieldWithAlias ->
+            val columnType = columnTypeTojOOQType(collection, Field.Column(fieldWithAlias.field.name))
+            fieldWithAlias.copy(
+                field = schemaGenerator.castToSQLDataType(fieldWithAlias.field, columnType)
+            )
+        }
 
-
+    private fun List<FieldWithAlias>.withAliases(): List<JooqField<*>> =
+        map { it.field.`as`(it.alias) }
 
     private fun translateIRAggregateField(field: Aggregate): AggregateFunction<*> {
         return when (field) {
@@ -388,6 +395,24 @@ class DefaultQuery<T : ColumnType> : DatabaseQuery<DefaultConfiguration<T>> {
     private fun translateIRAggregateFields(fields: Map<String, Aggregate>): List<org.jooq.Field<*>> {
         return fields.map { (alias, field) ->
             translateIRAggregateField(field).`as`(alias)
+        }
+    }
+
+    private fun columnTypeTojOOQType(
+        collection: String,
+        field: Field
+    ): T {
+        when (field) {
+            is Field.Column -> {
+                val table = configuration.tables.find { it.name == collection }
+                    ?: error("Table $collection not found in connector configuration")
+
+                val column = table.columns.find { it.name == field.column }
+                    ?: error("Column ${field.column} not found in table $collection")
+
+                return column.type
+            }
+            else -> throw ConnectorError.NotSupported("Unsupported: Relationships are not supported")
         }
     }
 }

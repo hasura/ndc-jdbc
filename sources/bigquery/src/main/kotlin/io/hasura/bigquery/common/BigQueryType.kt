@@ -62,14 +62,12 @@ object BigQueryTypeSerializer : JsonContentPolymorphicSerializer<BigQueryType>(
 enum class BigQueryScalarType {
     // Scalar types
     ANY,
-    BIGINT,
     BIGNUMERIC,
     BOOLEAN,
     BYTES,
     DATE,
     DATETIME,
     FLOAT64,
-    FLOAT,
     GEOGRAPHY,
     INT64,
     JSON,

@@ -87,12 +87,12 @@ class DefaultConnector<T : ColumnType>(
             try {
                 Telemetry.withActiveSpan("queryDatabase") { _ ->
                     coroutineScope {
-                        val query: DefaultQuery<T> = DefaultQuery()
+                        val query: DefaultQuery<T> = DefaultQuery(configuration, state, schemaGenerator)
                         val queryExecutor = DefaultConnection(state.client)
 
                         val rowsAsync = async {
                             queryExecutor.executeQuery(
-                                query.generateQuery(source, configuration, request)
+                                query.generateQuery(source, request)
                             )
                         }
 

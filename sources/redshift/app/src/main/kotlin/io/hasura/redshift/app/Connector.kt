@@ -4,6 +4,7 @@ import io.hasura.app.base.*
 import io.hasura.app.default.*
 import io.hasura.ndc.connector.*
 import io.hasura.common.*
+import io.hasura.redshift.common.RedshiftDataType
 
 object RedshiftConnector : ConnectorBuilder<DefaultConfiguration<RedshiftDataType>, DefaultState<RedshiftDataType>> {
     override fun createConnector(): Connector<DefaultConfiguration<RedshiftDataType>, DefaultState<RedshiftDataType>> {

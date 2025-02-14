@@ -93,9 +93,16 @@ object SnowflakeConfigGenerator : IConfigGenerator<SnowflakeConfiguration, Snowf
                 array_agg(object_construct(
                     'name', columns.column_name,
                     'description', columns.comment,
-                    'type', columns.data_type,
-                    'numeric_precision', columns.numeric_precision,
-                    'numeric_scale', columns.numeric_scale,
+                    'type', case 
+                        when columns.data_type = 'NUMBER' then 
+                            object_construct(
+                                'scalar_type', 'NUMBER',
+                                'precision', columns.numeric_precision,
+                                'scale', columns.numeric_scale
+                            )
+                        else 
+                            object_construct('scalar_type', columns.data_type)
+                    end,
                     'nullable', to_boolean(columns.is_nullable),
                     'auto_increment', to_boolean(columns.is_identity)
                 )) as COLUMNS
