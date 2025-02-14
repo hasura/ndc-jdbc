@@ -64,7 +64,11 @@ class DefaultQuery<T : ColumnType>(
         ctx: DSLContext,
         request: QueryRequest,
     ): JooqQuery = ctx
-        .select(getFieldSelects(request))
+        .select(
+            getFieldSelects(request)
+                .withCasts(request.collection)
+                .withAliases()
+        )
         .from(name(request.collection.split(".")))
         .where(getPredicate(request))
         .orderBy(getOrderByFields(request))
@@ -91,16 +95,6 @@ class DefaultQuery<T : ColumnType>(
         DatabaseSource.BIGQUERY -> SQLDialect.BIGQUERY
         DatabaseSource.REDSHIFT -> SQLDialect.REDSHIFT
     }
-
-    private fun getFieldSelects(
-        request: QueryRequest,
-        finalSelect: Boolean = true,
-    ): List<JooqField<*>> = getFieldSelectsHelper(request, true, finalSelect)
-
-    private fun getFieldSelectsWithoutAlias(
-        request: QueryRequest,
-        finalSelect: Boolean = true,
-    ): List<JooqField<*>> = getFieldSelectsHelper(request, false, finalSelect)
 
     private fun getPredicate(
         request: QueryRequest,
@@ -211,14 +205,13 @@ class DefaultQuery<T : ColumnType>(
         request: QueryRequest,
         varsCTE: CommonTableExpression<Record>
     ): SelectJoinStep<Record> {
-        val fields = getFieldSelectsWithoutAlias(request, false)
+        val fields = getFieldSelects(request).map { it.field }.toTypedArray()
+        val partitionFields = buildPartitionFields()
         
-        return select(
-            *fields.toTypedArray() + buildPartitionFields()
-        )
-        .from(name(request.collection.split(".")))
-        .join(varsCTE)
-        .on(getVariablePredicate(request))
+        return select(*(fields + partitionFields))
+            .from(name(request.collection.split(".")))
+            .join(varsCTE)
+            .on(getVariablePredicate(request))
     }
 
     private fun buildPartitionFields(): Array<JooqField<*>> = arrayOf(
@@ -271,6 +264,8 @@ class DefaultQuery<T : ColumnType>(
         resultsCTE: CommonTableExpression<Record>
     ): JooqQuery {
         val fields = getFieldSelects(request)
+            .withCasts(request.collection)
+            .withAliases()
         val baseQuery = buildBaseQuery(ctx, fields, varsCTE, resultsCTE)
         return baseQuery
             .let { applyVariableLimitOffset(it, request) }
@@ -341,30 +336,34 @@ class DefaultQuery<T : ColumnType>(
             else -> jsonElement.toString()
         }
 
-    private fun getFieldSelectsHelper(
-        request: QueryRequest,
-        applyAlias: Boolean = true,
-        finalSelect: Boolean = true
-    ): List<JooqField<*>> =
+    private data class FieldWithAlias(
+        val field: JooqField<*>,
+        val alias: String
+    )
+
+    private fun getFieldSelects(
+        request: QueryRequest
+    ): List<FieldWithAlias> =
         request.query.fields?.map { (alias, field) ->
-            val columnType = columnTypeTojOOQType(request.collection, field)
             when (field) {
-                is Field.Column -> {
-                    val columnRef = field(name(field.column))
-                    val castedColumn = if (finalSelect) {
-                        schemaGenerator.castToSQLDataType(columnRef, columnType)
-                    } else {
-                        columnRef
-                    }
-                    if (applyAlias) {
-                        castedColumn.`as`(alias)
-                    } else {
-                        castedColumn
-                    }
-                }
+                is Field.Column -> FieldWithAlias(
+                    field = field(name(field.column)),
+                    alias = alias
+                )
                 else -> throw ConnectorError.NotSupported("Unsupported: Relationships are not supported")
             }
         } ?: emptyList()
+    
+    private fun List<FieldWithAlias>.withCasts(collection: String): List<FieldWithAlias> =
+        map { fieldWithAlias ->
+            val columnType = columnTypeTojOOQType(collection, Field.Column(fieldWithAlias.field.name))
+            fieldWithAlias.copy(
+                field = schemaGenerator.castToSQLDataType(fieldWithAlias.field, columnType)
+            )
+        }
+
+    private fun List<FieldWithAlias>.withAliases(): List<JooqField<*>> =
+        map { it.field.`as`(it.alias) }
 
     private fun translateIRAggregateField(field: Aggregate): AggregateFunction<*> {
         return when (field) {
