@@ -96,111 +96,95 @@ class DefaultQuery<T : ColumnType>(
     private fun getPredicate(): Condition = request.query.predicate?.let { generateCondition(it) } ?: noCondition()
 
     private fun generateCondition(expr: Expression): Condition = when (expr) {
-        is Expression.And ->
-            and(expr.expressions.map { generateCondition(it) })
+        is Expression.And -> and(expr.expressions.map { generateCondition(it) })
+        is Expression.Or -> or(expr.expressions.map { generateCondition(it) })
+        is Expression.Not -> not(generateCondition(expr.expression))
+        is Expression.UnaryComparisonOperator -> handleUnaryComparison(expr)
+        is Expression.BinaryComparisonOperator -> handleBinaryComparison(expr)
+        is Expression.Exists -> throw ConnectorError.NotSupported("Exists queries not supported yet")
+    }
 
-        is Expression.Or ->
-            or(expr.expressions.map { generateCondition(it) })
+    private fun handleUnaryComparison(expr: Expression.UnaryComparisonOperator): Condition = when (expr.operator) {
+        UnaryComparisonOperatorType.IS_NULL -> field(name(getColumnName(expr.column))).isNull
+    }
 
-        is Expression.Not ->
-            not(generateCondition(expr.expression))
-
-        is Expression.UnaryComparisonOperator -> when (expr.operator) {
-            UnaryComparisonOperatorType.IS_NULL ->
-                field(name(getColumnName(expr.column))).isNull
+    private fun handleBinaryComparison(expr: Expression.BinaryComparisonOperator): Condition {
+        val field = field(name(getColumnName(expr.column)))
+        
+        return when (val value = expr.value) {
+            is ComparisonValue.Scalar -> handleScalarComparison(field, expr.operator, value)
+            is ComparisonValue.Column -> handleColumnComparison(field, expr.operator, value)
+            is ComparisonValue.Variable -> handleVariableComparison(field, expr.operator, value)
         }
+    }
 
-        is Expression.BinaryComparisonOperator -> {
-            val field = field(name(getColumnName(expr.column)))
-            when (val value = expr.value) {
-                is ComparisonValue.Scalar -> {
-                    val convertedValue = convertJsonValue(value)
+    private fun handleBasicComparison(
+        field: JooqField<Any>,
+        operator: String,
+        compareWith: JooqField<Any>
+    ): Condition = when (operator) {
+        "_eq" -> field.eq(compareWith)
+        "_neq" -> field.ne(compareWith)
+        "_gt" -> field.gt(compareWith)
+        "_lt" -> field.lt(compareWith)
+        "_gte" -> field.ge(compareWith)
+        "_lte" -> field.le(compareWith)
+        "_regex", "_iregex", "_nregex", "_niregex" -> handleRegexComparison(
+            field,
+            compareWith,
+            operator.startsWith("_n"),
+            operator.contains("i"),
+            source
+        )
+        "_like" -> field.like(compareWith.cast(SQLDataType.VARCHAR))
+        "_ilike" -> field.likeIgnoreCase(compareWith.cast(SQLDataType.VARCHAR))
+        "_nlike" -> field.notLike(compareWith.cast(SQLDataType.VARCHAR))
+        "_nilike" -> field.notLikeIgnoreCase(compareWith.cast(SQLDataType.VARCHAR))
+        else -> throw ConnectorError.NotSupported("Unsupported operator: $operator")
+    }
 
-                    when (expr.operator) {
-                        "_eq" -> field.eq(convertedValue)
-                        "_neq" -> field.ne(convertedValue)
-                        "_gt" -> field.gt(convertedValue)
-                        "_lt" -> field.lt(convertedValue)
-                        "_gte" -> field.ge(convertedValue)
-                        "_lte" -> field.le(convertedValue)
-                        "_regex", "_iregex", "_nregex", "_niregex" -> {
-                            val isNegated = expr.operator.startsWith("_n")
-                            val isCaseInsensitive = expr.operator.contains("i")
-                            
-                            handleRegexComparison(
-                                field,
-                                inline(convertedValue.toString()),
-                                isNegated,
-                                isCaseInsensitive,
-                                source
-                            )
-                        }
-                        "_like" -> field.like("%" + convertedValue.toString() + "%")
-                        "_ilike" -> field.likeIgnoreCase("%" + convertedValue.toString() + "%")
-                        "_nlike" -> field.notLike("%" + convertedValue.toString() + "%")
-                        "_nilike" -> field.notLikeIgnoreCase("%" + convertedValue.toString() + "%")
-                        "_in" -> when (convertedValue) {
-                            is List<*> -> field.`in`(convertedValue)
-                            else -> throw ConnectorError.NotSupported("IN operator requires an array value")
-                        }
-                        else -> throw ConnectorError.NotSupported("Unsupported operator: ${expr.operator}")
-                    }
-                }
-                is ComparisonValue.Column -> {
-                    when (expr.operator) {
-                        "_eq" -> field.eq(field(name(getColumnName(value.column))))
-                        "_neq" -> field.ne(field(name(getColumnName(value.column))))
-                        "_gt" -> field.gt(field(name(getColumnName(value.column))))
-                        "_lt" -> field.lt(field(name(getColumnName(value.column))))
-                        "_gte" -> field.ge(field(name(getColumnName(value.column))))
-                        "_lte" -> field.le(field(name(getColumnName(value.column))))
-                        "_regex", "_iregex", "_nregex", "_niregex" -> {
-                            val isNegated = expr.operator.startsWith("_n")
-                            val isCaseInsensitive = expr.operator.contains("i")
-                            val otherField = field(name(getColumnName(value.column)))
-                            
-                            handleRegexComparison(
-                                field,
-                                otherField,
-                                isNegated,
-                                isCaseInsensitive,
-                                source
-                            )
-                        }
-                        "_like" -> field.like("%" + field(name(getColumnName(value.column))).toString() + "%")
-                        "_ilike" -> field.likeIgnoreCase("%" + field(name(getColumnName(value.column))).toString() + "%")
-                        "_in" -> throw ConnectorError.NotSupported("IN operator not supported in column comparison")
-                        else -> throw ConnectorError.NotSupported("Unsupported operator: ${expr.operator}")
-                    }
-                }
-                is ComparisonValue.Variable -> when (request.variables?.isNotEmpty() == true) {
-                    true -> when (expr.operator) {
-                        "_eq" -> field(name(getColumnName(expr.column)))
-                            .eq(field(name(variablesCTEName, variableName)))
-                        "_neq" -> field(name(getColumnName(expr.column)))
-                            .ne(field(name(variablesCTEName, variableName)))
-                        "_gt" -> field(name(getColumnName(expr.column)))
-                            .gt(field(name(variablesCTEName, variableName)))
-                        "_lt" -> field(name(getColumnName(expr.column)))
-                            .lt(field(name(variablesCTEName, variableName)))
-                        "_gte" -> field(name(getColumnName(expr.column)))
-                            .ge(field(name(variablesCTEName, variableName)))
-                        "_lte" -> field(name(getColumnName(expr.column)))
-                            .le(field(name(variablesCTEName, variableName)))
-                        "_like" -> field(name(getColumnName(expr.column)))
-                            .like(field(name(variablesCTEName, variableName)).cast(SQLDataType.VARCHAR))
-                        "_ilike" -> field(name(getColumnName(expr.column)))
-                            .likeIgnoreCase(field(name(variablesCTEName, variableName)).cast(SQLDataType.VARCHAR))
-                        else -> throw ConnectorError.NotSupported("Unsupported operator: ${expr.operator}")
-                    }
-                    false -> field(name(getColumnName(expr.column)))
-                        .eq(value.name)
+    private fun handleScalarComparison(
+        field: JooqField<Any>,
+        operator: String,
+        value: ComparisonValue.Scalar
+    ): Condition {
+        val convertedValue = convertJsonValue(value)
+        return when (operator) {
+            "_in" -> when (convertedValue) {
+                is List<*> -> field.`in`(convertedValue)
+                else -> throw ConnectorError.NotSupported("IN operator requires an array value")
+            }
+            else -> handleBasicComparison(field, operator, inline(convertedValue))
+        }
+    }
+
+    private fun handleColumnComparison(
+        field: JooqField<Any>,
+        operator: String,
+        value: ComparisonValue.Column
+    ): Condition {
+        val otherField = field(name(getColumnName(value.column)))
+        return when (operator) {
+            "_in" -> throw ConnectorError.NotSupported("IN operator not supported in column comparison")
+            else -> handleBasicComparison(field, operator, otherField)
+        }
+    }
+
+    private fun handleVariableComparison(
+        field: JooqField<Any>,
+        operator: String,
+        value: ComparisonValue.Variable
+    ): Condition {
+        return when (request.variables?.isNotEmpty() == true) {
+            true -> {
+                val varField = field(name(variablesCTEName, variableName))
+                when (operator) {
+                    "_like", "_ilike" -> handleBasicComparison(field, operator, varField)
+                    else -> handleBasicComparison(field, operator, varField)
                 }
             }
+            false -> field.eq(value.name)
         }
-
-        is Expression.Exists ->
-            throw ConnectorError.NotSupported("Exists queries not supported yet")
     }
 
     private fun handleRegexComparison(
