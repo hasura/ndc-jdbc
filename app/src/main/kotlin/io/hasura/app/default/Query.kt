@@ -6,6 +6,7 @@ import io.hasura.ndc.connector.*
 import io.hasura.ndc.ir.*
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import org.jooq.*
 import org.jooq.Field as JooqField
@@ -24,26 +25,19 @@ const val rowNumberName = "rn"
 class DefaultQuery<T : ColumnType>(
     private val configuration: DefaultConfiguration<T>,
     private val state: DefaultState<T>,
-    private val schemaGenerator: DefaultSchemaGeneratorClass<T>
+    private val schemaGenerator: DefaultSchemaGeneratorClass<T>,
+    private val source: DatabaseSource,
+    private val request: QueryRequest,
 ) : DatabaseQuery<DefaultConfiguration<T>> {
-    override fun generateQuery(
-        source: DatabaseSource,
-        request: QueryRequest,
-    ): String = generateBaseQuery(source, request).toString()
+    override fun generateQuery(): String = generateBaseQuery().toString()
 
-    override fun generateExplainQuery(
-        source: DatabaseSource,
-        request: QueryRequest,
-    ): String = "EXPLAIN ${generateBaseQuery(source, request)}"
+    override fun generateExplainQuery(): String = "EXPLAIN ${generateBaseQuery()}"
 
-    private fun generateBaseQuery(
-        source: DatabaseSource,
-        request: QueryRequest,
-    ): JooqQuery {
+    private fun generateBaseQuery(): JooqQuery {
         val ctx = using(getDatabaseDialect(source))
         val sql = when {
-            request.variables.isNotEmpty() -> generateVariableQuery(ctx, request)
-            else -> generateSingleQuery(ctx, request)
+            request.variables?.isNotEmpty() == true -> generateVariableQuery(ctx)
+            else -> generateSingleQuery(ctx)
         }
 
         ConnectorLogger.logger.debug("Generated sql: ${sql}")
@@ -53,41 +47,44 @@ class DefaultQuery<T : ColumnType>(
 
     fun generateVariableQuery(
         ctx: DSLContext,
-        request: QueryRequest,
     ): JooqQuery {
-        val varsCTE = buildVariablesCTE(request)
-        val resultsCTE = buildResultsCTE(request, varsCTE)
-        return buildFinalVariableQuery(ctx, request, varsCTE, resultsCTE)
+        val varsCTE = buildVariablesCTE()
+        val resultsCTE = buildResultsCTE(varsCTE)
+        return buildFinalVariableQuery(ctx, varsCTE, resultsCTE)
     }
 
     fun generateSingleQuery(
         ctx: DSLContext,
-        request: QueryRequest,
     ): JooqQuery = ctx
         .select(
-            getFieldSelects(request)
+            getFieldSelects()
                 .withCasts(request.collection)
                 .withAliases()
         )
         .from(name(request.collection.split(".")))
-        .where(getPredicate(request))
-        .orderBy(getOrderByFields(request))
+        .where(getPredicate())
+        .orderBy(getOrderByFields())
         .limit(request.query.limit?.toInt())
         .offset(request.query.offset?.toInt())
 
-    fun generateAggregateQuery(
-        source: DatabaseSource,
-        request: QueryRequest,
-    ): String {
+    override fun generateAggregateQuery(): String {
         val ctx = using(getDatabaseDialect(source))
-        return ctx
+        val sql = ctx
             .select(translateIRAggregateFields(request.query.aggregates!!))
-            .from(name(request.collection.split(".")))
-            .where(getPredicate(request))
-            .orderBy(getOrderByFields(request))
-            .limit(request.query.limit?.toInt())
-            .offset(request.query.offset?.toInt())
+            .from(
+                ctx
+                    .select(asterisk())
+                    .from(name(request.collection.split(".")))
+                    .where(getPredicate())
+                    .orderBy(getOrderByFields())
+                    .limit(request.query.limit?.toInt())
+                    .offset(request.query.offset?.toInt())
+            )
             .toString()
+
+        ConnectorLogger.logger.debug("Generated aggregate sql: ${sql}")
+
+        return sql
     }
 
     private fun getDatabaseDialect(type: DatabaseSource): SQLDialect = when (type) {
@@ -96,9 +93,7 @@ class DefaultQuery<T : ColumnType>(
         DatabaseSource.REDSHIFT -> SQLDialect.REDSHIFT
     }
 
-    private fun getPredicate(
-        request: QueryRequest,
-    ): Condition = request.query.predicate?.let { generateCondition(it) } ?: noCondition()
+    private fun getPredicate(): Condition = request.query.predicate?.let { generateCondition(it) } ?: noCondition()
 
     private fun generateCondition(expr: Expression): Condition = when (expr) {
         is Expression.And ->
@@ -128,6 +123,22 @@ class DefaultQuery<T : ColumnType>(
                         "_lt" -> field.lt(convertedValue)
                         "_gte" -> field.ge(convertedValue)
                         "_lte" -> field.le(convertedValue)
+                        "_regex", "_iregex", "_nregex", "_niregex" -> {
+                            val isNegated = expr.operator.startsWith("_n")
+                            val isCaseInsensitive = expr.operator.contains("i")
+                            
+                            handleRegexComparison(
+                                field,
+                                inline(convertedValue.toString()),
+                                isNegated,
+                                isCaseInsensitive,
+                                source
+                            )
+                        }
+                        "_like" -> field.like("%" + convertedValue.toString() + "%")
+                        "_ilike" -> field.likeIgnoreCase("%" + convertedValue.toString() + "%")
+                        "_nlike" -> field.notLike("%" + convertedValue.toString() + "%")
+                        "_nilike" -> field.notLikeIgnoreCase("%" + convertedValue.toString() + "%")
                         "_in" -> when (convertedValue) {
                             is List<*> -> field.`in`(convertedValue)
                             else -> throw ConnectorError.NotSupported("IN operator requires an array value")
@@ -135,11 +146,55 @@ class DefaultQuery<T : ColumnType>(
                         else -> throw ConnectorError.NotSupported("Unsupported operator: ${expr.operator}")
                     }
                 }
-                is ComparisonValue.Column ->
-                    throw ConnectorError.NotSupported("Column comparisons not supported yet")
-                is ComparisonValue.Variable -> {
-                    field(name(getColumnName(expr.column)))
-                        .eq(field(name(variablesCTEName, variableName)))
+                is ComparisonValue.Column -> {
+                    when (expr.operator) {
+                        "_eq" -> field.eq(field(name(getColumnName(value.column))))
+                        "_neq" -> field.ne(field(name(getColumnName(value.column))))
+                        "_gt" -> field.gt(field(name(getColumnName(value.column))))
+                        "_lt" -> field.lt(field(name(getColumnName(value.column))))
+                        "_gte" -> field.ge(field(name(getColumnName(value.column))))
+                        "_lte" -> field.le(field(name(getColumnName(value.column))))
+                        "_regex", "_iregex", "_nregex", "_niregex" -> {
+                            val isNegated = expr.operator.startsWith("_n")
+                            val isCaseInsensitive = expr.operator.contains("i")
+                            val otherField = field(name(getColumnName(value.column)))
+                            
+                            handleRegexComparison(
+                                field,
+                                otherField,
+                                isNegated,
+                                isCaseInsensitive,
+                                source
+                            )
+                        }
+                        "_like" -> field.like("%" + field(name(getColumnName(value.column))).toString() + "%")
+                        "_ilike" -> field.likeIgnoreCase("%" + field(name(getColumnName(value.column))).toString() + "%")
+                        "_in" -> throw ConnectorError.NotSupported("IN operator not supported in column comparison")
+                        else -> throw ConnectorError.NotSupported("Unsupported operator: ${expr.operator}")
+                    }
+                }
+                is ComparisonValue.Variable -> when (request.variables?.isNotEmpty() == true) {
+                    true -> when (expr.operator) {
+                        "_eq" -> field(name(getColumnName(expr.column)))
+                            .eq(field(name(variablesCTEName, variableName)))
+                        "_neq" -> field(name(getColumnName(expr.column)))
+                            .ne(field(name(variablesCTEName, variableName)))
+                        "_gt" -> field(name(getColumnName(expr.column)))
+                            .gt(field(name(variablesCTEName, variableName)))
+                        "_lt" -> field(name(getColumnName(expr.column)))
+                            .lt(field(name(variablesCTEName, variableName)))
+                        "_gte" -> field(name(getColumnName(expr.column)))
+                            .ge(field(name(variablesCTEName, variableName)))
+                        "_lte" -> field(name(getColumnName(expr.column)))
+                            .le(field(name(variablesCTEName, variableName)))
+                        "_like" -> field(name(getColumnName(expr.column)))
+                            .like(field(name(variablesCTEName, variableName)).cast(SQLDataType.VARCHAR))
+                        "_ilike" -> field(name(getColumnName(expr.column)))
+                            .likeIgnoreCase(field(name(variablesCTEName, variableName)).cast(SQLDataType.VARCHAR))
+                        else -> throw ConnectorError.NotSupported("Unsupported operator: ${expr.operator}")
+                    }
+                    false -> field(name(getColumnName(expr.column)))
+                        .eq(value.name)
                 }
             }
         }
@@ -148,9 +203,44 @@ class DefaultQuery<T : ColumnType>(
             throw ConnectorError.NotSupported("Exists queries not supported yet")
     }
 
-    private fun getOrderByFields(
-        request: QueryRequest,
-    ): List<SortField<*>> {
+    private fun handleRegexComparison(
+        field: org.jooq.Field<*>,
+        compareWith: org.jooq.Field<*>,
+        isNegated: Boolean,
+        isCaseInsensitive: Boolean,
+        source: DatabaseSource
+    ): Condition {
+        val expr = when (getDatabaseDialect(source)) {
+            SQLDialect.SNOWFLAKE -> {
+                if (isCaseInsensitive) {
+                    condition("REGEXP_LIKE({0}, {1}, 'i')", field, compareWith)
+                } else {
+                    condition("REGEXP_LIKE({0}, {1})", field, compareWith)
+                }
+            }
+            
+            SQLDialect.BIGQUERY -> {
+                if (isCaseInsensitive) {
+                    condition("REGEXP_CONTAINS(LOWER({0}), LOWER({1}))", field, compareWith)
+                } else {
+                    condition("REGEXP_CONTAINS({0}, {1})", field, compareWith)
+                }
+            }
+            
+            SQLDialect.REDSHIFT -> {
+                if (isCaseInsensitive) {
+                    condition("REGEXP_LIKE(LOWER({0}), LOWER({1}))", field, compareWith)
+                } else {
+                    condition("REGEXP_LIKE({0}, {1})", field, compareWith)
+                }
+            }
+            
+            else -> throw ConnectorError.NotSupported("Regex operations not supported for this database")
+        }
+        return if (isNegated) not(expr) else expr
+    }
+
+    private fun getOrderByFields(): List<SortField<*>> {
         return request.query.orderBy?.elements?.map { element ->
             when (val target = element.target) {
                 is OrderByTarget.Column -> {
@@ -171,17 +261,15 @@ class DefaultQuery<T : ColumnType>(
         }?: emptyList()
     }
 
-    private fun buildVariablesCTE(
-        request: QueryRequest,
-    ): CommonTableExpression<Record> {
+    private fun buildVariablesCTE(): CommonTableExpression<Record> {
         return name(variablesCTEName)
             .`as`(
-                request.variables.mapIndexed { index, variableMap ->
+                request.variables?.mapIndexed { index, variableMap ->
                     select(
                         *createVariableFields(variableMap),
                         inline(index).`as`(indexName)
                     )
-                }.reduce { acc: SelectOrderByStep<Record>, select: SelectSelectStep<Record> ->
+                }?.reduce { acc: SelectOrderByStep<Record>, select: SelectSelectStep<Record> ->
                     acc.unionAll(select)
                 }
             )
@@ -189,29 +277,31 @@ class DefaultQuery<T : ColumnType>(
 
     private fun createVariableFields(variableMap: Map<String, JsonElement>): Array<JooqField<*>> {
         return variableMap.map { (_, value) ->
-            inline(convertJsonValue(ComparisonValue.Scalar(value))).`as`(variableName)
+            when (value) {
+                JsonNull -> inline(null as String?).`as`(variableName)
+                else -> inline(convertJsonValue(ComparisonValue.Scalar(value))).`as`(variableName)
+            }
         }.toTypedArray()
     }
 
     private fun buildResultsCTE(
-        request: QueryRequest,
         varsCTE: CommonTableExpression<Record>
     ): CommonTableExpression<Record> {
         return name(resultsCTEName)
-            .`as`(buildResultsCTEQuery(request, varsCTE))
+            .`as`(buildResultsCTEQuery(varsCTE))
     }
 
     private fun buildResultsCTEQuery(
-        request: QueryRequest,
         varsCTE: CommonTableExpression<Record>
     ): SelectJoinStep<Record> {
-        val fields = getFieldSelects(request).map { it.field }.toTypedArray()
+        val fields = getFieldSelects().map { it.field }.toTypedArray()
         val partitionFields = buildPartitionFields()
+        val resultTable = table(name(request.collection.split("."))).`as`("rtb")
         
-        return select(*(fields + partitionFields))
-            .from(name(request.collection.split(".")))
+        return select(resultTable.asterisk(), *partitionFields)
+            .from(resultTable)
             .join(varsCTE)
-            .on(getVariablePredicate(request))
+            .on(getVariablePredicate())
     }
 
     private fun buildPartitionFields(): Array<JooqField<*>> = arrayOf(
@@ -223,11 +313,11 @@ class DefaultQuery<T : ColumnType>(
         field(name(indexName))
     )
 
-    private fun getVariablePredicate(request: QueryRequest): Condition =
+    private fun getVariablePredicate(): Condition =
         request.query.predicate?.let { generateCondition(it) }
             ?: throw ConnectorError.NotSupported("Predicate is required for variable queries")
 
-    private fun getVariableJoinColumn(request: QueryRequest): String =
+    private fun getVariableJoinColumn(): String =
         request.query.predicate?.let { predicate ->
             when (predicate) {
                 is Expression.BinaryComparisonOperator -> {
@@ -259,17 +349,16 @@ class DefaultQuery<T : ColumnType>(
 
     private fun buildFinalVariableQuery(
         ctx: DSLContext,
-        request: QueryRequest,
         varsCTE: CommonTableExpression<Record>,
         resultsCTE: CommonTableExpression<Record>
     ): JooqQuery {
-        val fields = getFieldSelects(request)
+        val fields = getFieldSelects()
             .withCasts(request.collection)
             .withAliases()
         val baseQuery = buildBaseQuery(ctx, fields, varsCTE, resultsCTE)
         return baseQuery
-            .let { applyVariableLimitOffset(it, request) }
-            .let { applyVariableOrdering(it, request) }
+            .let { applyVariableLimitOffset(it) }
+            .let { applyVariableOrdering(it) }
     }
 
     private fun buildBaseQuery(
@@ -290,7 +379,6 @@ class DefaultQuery<T : ColumnType>(
 
     private fun applyVariableLimitOffset(
         query: SelectWhereStep<Record>,
-        request: QueryRequest
     ): SelectWhereStep<Record> {
         request.query.offset?.let { offset ->
             query.where(field(name(rowNumberName)).gt(inline(offset.toInt())))
@@ -306,10 +394,9 @@ class DefaultQuery<T : ColumnType>(
 
     private fun applyVariableOrdering(
         query: SelectWhereStep<Record>,
-        request: QueryRequest
     ): SelectSeekStepN<Record> = query.orderBy(
         listOf(field(name(indexName))) +
-        getOrderByFields(request)
+        getOrderByFields()
     )
 
     private fun convertJsonPrimitive(primitive: JsonPrimitive): Any = when {
@@ -321,7 +408,7 @@ class DefaultQuery<T : ColumnType>(
         else -> primitive.content
     }
 
-    private fun convertJsonArray(array: JsonArray): List<Any> =
+    private fun convertJsonArray(array: JsonArray): List<Any> = 
         array.map { element ->
             when (element) {
                 is JsonPrimitive -> convertJsonPrimitive(element)
@@ -329,7 +416,7 @@ class DefaultQuery<T : ColumnType>(
             }
         }
 
-    private fun convertJsonValue(value: ComparisonValue.Scalar): Any =
+    private fun convertJsonValue(value: ComparisonValue.Scalar): Any = 
         when (val jsonElement = value.value) {
             is JsonPrimitive -> convertJsonPrimitive(jsonElement)
             is JsonArray -> convertJsonArray(jsonElement)
@@ -341,9 +428,7 @@ class DefaultQuery<T : ColumnType>(
         val alias: String
     )
 
-    private fun getFieldSelects(
-        request: QueryRequest
-    ): List<FieldWithAlias> =
+    private fun getFieldSelects(): List<FieldWithAlias> =
         request.query.fields?.map { (alias, field) ->
             when (field) {
                 is Field.Column -> FieldWithAlias(

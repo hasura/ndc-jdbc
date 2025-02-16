@@ -48,7 +48,7 @@ class DefaultConnector<T : ColumnType>(
                 transactional = null
             ),
             query = QueryCapabilities(
-                aggregates = null,
+                aggregates = JsonObject(emptyMap()),
                 variables = JsonObject(emptyMap()),
                 explain = null,
                 nestedFields = null
@@ -87,51 +87,51 @@ class DefaultConnector<T : ColumnType>(
             try {
                 Telemetry.withActiveSpan("queryDatabase") { _ ->
                     coroutineScope {
-                        val query: DefaultQuery<T> = DefaultQuery(configuration, state, schemaGenerator)
+                        val query = DefaultQuery(
+                            configuration,
+                            state,
+                            schemaGenerator,
+                            source,
+                            request
+                        )
+
                         val queryExecutor = DefaultConnection(state.client)
 
-                        val rowsAsync = async {
-                            queryExecutor.executeQuery(
-                                query.generateQuery(source, request)
-                            )
+                        // Handle regular query results
+                        val rows = request.query.fields?.let { 
+                            queryExecutor.executeQuery(query.generateQuery())
                         }
 
-
-                        val aggregatesAsync = request.query.aggregates?.let {
-                            async {
-                                queryExecutor.executeQuery(
-                                    query.generateAggregateQuery(source, request)
-                                ).firstOrNull()?.let { JsonObject(it) }
-                            }
+                        // Handle aggregates if present
+                        val aggregates = request.query.aggregates?.let {
+                            queryExecutor.executeQuery(query.generateAggregateQuery())
+                                .firstOrNull()?.let { JsonObject(it) }
                         }
 
-                        val rows = rowsAsync.await()
-                        val aggregates = aggregatesAsync?.await()
+                        ConnectorLogger.logger.debug("Request: $request")
+                        ConnectorLogger.logger.debug("Rows: $rows")
+                        ConnectorLogger.logger.debug("Aggregates: $aggregates")
 
-
-                        val rowSets = if (request.variables.isNotEmpty()) {
-                            val groupedRows = rows.groupBy { row ->
-                                (row[indexName] as JsonPrimitive).content.toInt()
-                            }
-                            request.variables.indices.map { varIndex ->
-                                val variableRows = groupedRows[varIndex]?.map { row ->
-                                    row.filterKeys { it != indexName }
-                                } ?: emptyList()
-                                RowSet(rows = variableRows)
-                            }
-
-                        } else {
-                            val rowSet = RowSet(rows = rows, aggregates = aggregates)
-                            listOf(rowSet)
+                        val variables = request.variables
+                        when {
+                            variables?.isEmpty() == true -> 
+                                QueryResponse(rowSets = emptyList())
+                            variables == null -> 
+                                QueryResponse(rowSets = listOf(RowSet(rows = rows, aggregates = aggregates)))
+                            else -> 
+                                QueryResponse(rowSets = variables.indices.map { index ->
+                                    RowSet(rows = rows?.filter { row -> 
+                                        row[indexName]?.toString()?.toIntOrNull() == index 
+                                    }?.map { row ->
+                                        row.filterKeys { it != indexName }
+                                    })
+                                })
                         }
-
-                        QueryResponse(rowSets = rowSets)
-                    }}
-
-                    } finally {
-                        connection.close()
                     }
-
+                }
+            } finally {
+                connection.close()
+            }
         }
     }
 
