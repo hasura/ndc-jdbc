@@ -29,12 +29,12 @@ abstract class DefaultSchemaGeneratorClass<T : ColumnType> : ISchemaGenerator<De
     ): DataType<out Any>
 
     abstract fun mapAggregateFunctions(
-        columnTypeStr: String,
+        columnType: T,
         representation: TypeRepresentation?
     ): Map<String, AggregateFunctionDefinition>
 
     abstract fun mapComparisonOperators(
-        columnTypeStr: String,
+        columnType: T,
         representation: TypeRepresentation?
     ): Map<String, ComparisonOperatorDefinition>
 
@@ -80,7 +80,7 @@ abstract class DefaultSchemaGeneratorClass<T : ColumnType> : ISchemaGenerator<De
         }
     }
 
-    protected fun createScalarType(representationType: RepresentationType?, columnType: String): ScalarType {
+    protected fun createScalarType(representationType: RepresentationType?, columnType: T): ScalarType {
         val representation = representationType?.let { TypeRepresentation(it) }
         return ScalarType(
             representation = representation,
@@ -103,14 +103,14 @@ abstract class DefaultSchemaGenerator<T : ColumnType> : DefaultSchemaGeneratorCl
     }
 
     override fun mapAggregateFunctions(
-        columnTypeStr: String,
+        columnType: T,
         representation: TypeRepresentation?
     ): Map<String, AggregateFunctionDefinition> {
         return emptyMap()
     }
 
     override fun mapComparisonOperators(
-        columnTypeStr: String,
+        columnType: T,
         representation: TypeRepresentation?
     ): Map<String, ComparisonOperatorDefinition> {
         return emptyMap()

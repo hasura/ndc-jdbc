@@ -48,7 +48,7 @@ class SnowflakeSchemaGenerator : DefaultSchemaGenerator<SnowflakeDataType>() {
             else -> null
         }
         
-        return createScalarType(representationType, columnType.typeName)
+        return createScalarType(representationType, columnType)
     }
 
     override fun mapColumnDataTypeToSQLDataType(
@@ -91,6 +91,95 @@ class SnowflakeSchemaGenerator : DefaultSchemaGenerator<SnowflakeDataType>() {
             SnowflakeDataType.VECTOR -> 
                 cast(field("TO_ARRAY({0})", Any::class.java, field), SQLDataType.JSON)
             else -> field
+        }
+    }
+
+    private fun getSupportedAggregateFunctions(columnType: SnowflakeDataType): List<String> {
+        val numericFunctions = listOf(
+            "avg", "sum", "min", "max",
+            "stddev_pop", "stddev_samp",
+            "var_pop", "var_samp"
+        )
+
+        return when (columnType) {
+            is SnowflakeDataType.NUMBER,
+            SnowflakeDataType.FLOAT -> numericFunctions
+            
+            SnowflakeDataType.BOOLEAN,
+            SnowflakeDataType.DATE,
+            SnowflakeDataType.TEXT,
+            SnowflakeDataType.TIME,
+            SnowflakeDataType.TIMESTAMP_NTZ,
+            SnowflakeDataType.TIMESTAMP_LTZ,
+            SnowflakeDataType.TIMESTAMP_TZ -> listOf("min", "max")
+            
+            else -> emptyList()
+        }
+    }
+
+    override fun mapAggregateFunctions(
+        columnType: SnowflakeDataType,
+        representation: TypeRepresentation?
+    ): Map<String, AggregateFunctionDefinition> {
+        return getSupportedAggregateFunctions(columnType).associateWith { func ->
+            AggregateFunctionDefinition(
+                resultType = Type.Named(name = columnType.typeName)
+            )
+        }
+    }
+
+    private fun getSupportedOperators(columnType: SnowflakeDataType): List<String> {
+        val baseOperators = listOf("_eq", "_neq", "_in")
+        val comparisonOperators = listOf("_gt", "_lt", "_gte", "_lte")
+        val textOperators = listOf(
+            "_like", "_ilike", "_nlike", "_nilike",
+            "_regex", "_iregex", "_nregex", "_niregex"
+        )
+
+        return when (columnType) {
+            SnowflakeDataType.TEXT -> baseOperators + comparisonOperators + textOperators
+            
+            is SnowflakeDataType.NUMBER,
+            SnowflakeDataType.FLOAT -> baseOperators + comparisonOperators
+            
+            SnowflakeDataType.DATE,
+            SnowflakeDataType.TIME,
+            SnowflakeDataType.TIMESTAMP_NTZ,
+            SnowflakeDataType.TIMESTAMP_LTZ,
+            SnowflakeDataType.TIMESTAMP_TZ -> baseOperators + comparisonOperators
+            
+            SnowflakeDataType.BOOLEAN,
+            SnowflakeDataType.ARRAY,
+            SnowflakeDataType.OBJECT,
+            SnowflakeDataType.VARIANT,
+            SnowflakeDataType.VECTOR,
+            SnowflakeDataType.BINARY,
+            SnowflakeDataType.GEOGRAPHY,
+            SnowflakeDataType.GEOMETRY -> baseOperators
+        }
+    }
+
+    override fun mapComparisonOperators(
+        columnType: SnowflakeDataType,
+        representation: TypeRepresentation?
+    ): Map<String, ComparisonOperatorDefinition> {
+        val operators = getSupportedOperators(columnType)
+
+        return operators.associateWith { oper ->
+            when (oper) {
+                "_eq" -> ComparisonOperatorDefinition(
+                    type = ComparisonOperatorDefinitionType.Equal,
+                    argumentType = null
+                )
+                "_in" -> ComparisonOperatorDefinition(
+                    type = ComparisonOperatorDefinitionType.In,
+                    argumentType = null
+                )
+                else -> ComparisonOperatorDefinition(
+                    type = ComparisonOperatorDefinitionType.Custom,
+                    argumentType = Type.Named(name = columnType.typeName)
+                )
+            }
         }
     }
 }
