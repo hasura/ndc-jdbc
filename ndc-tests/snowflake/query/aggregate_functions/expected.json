@@ -1,0 +1,16 @@
+[
+  {
+    "aggregates": {
+      "how_many_invoices": 412,
+      "how_many_non_null_billing_state_rows": 210,
+      "how_many_distinct_billing_countries": 24,
+      "min_invoice_id": "1",
+      "max_invoice_id": "412",
+      "sum_total": "2328.6",
+      "stddev_pop_total": "4.739557312",
+      "stddev_samp_total": "4.745319694",
+      "var_pop_total": "22.4634035112",
+      "var_samp_total": "22.5180589942"
+    }
+  }
+]

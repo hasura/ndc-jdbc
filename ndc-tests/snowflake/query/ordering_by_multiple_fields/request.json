@@ -8,15 +8,15 @@
         "arguments": {}
       }
     },
-    "limit": 5,
-    "offset": 3,
+    "limit": 10,
+    "offset": 10,
     "order_by": {
       "elements": [
         {
           "order_direction": "asc",
           "target": {
             "type": "column",
-            "name": "TITLE",
+            "name": "ARTISTID",
             "path": []
           }
         },
@@ -24,7 +24,7 @@
           "order_direction": "desc",
           "target": {
             "type": "column",
-            "name": "ALBUMID",
+            "name": "TITLE",
             "path": []
           }
         }

@@ -22,7 +22,7 @@
           "operator": "_nilike",
           "value": {
             "type": "scalar",
-            "value": "%all%"
+            "value": "%All%"
           }
         }
       ]
