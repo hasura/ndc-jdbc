@@ -24,10 +24,7 @@ class SnowflakeSchemaGenerator : DefaultSchemaGenerator<SnowflakeDataType>() {
                         precision <= 18 -> RepresentationType.Int64
                         else -> RepresentationType.Biginteger
                     }
-                    scale > 0 -> when {
-                        precision <= 15 -> RepresentationType.Float64
-                        else -> RepresentationType.Bigdecimal
-                    }
+                    scale > 0 -> RepresentationType.Bigdecimal
                     else -> RepresentationType.Bigdecimal
                 }
             }
@@ -74,14 +71,17 @@ class SnowflakeSchemaGenerator : DefaultSchemaGenerator<SnowflakeDataType>() {
         }
     }
 
-    override fun castToSQLDataType(field: JooqField<*>, columnType: SnowflakeDataType): JooqField<*> {
+    override fun castToSQLDataType(
+        field: JooqField<*>,
+        columnType: SnowflakeDataType?
+    ): JooqField<*> {
         return when (columnType) {
             is SnowflakeDataType.NUMBER -> {
                 val (precision, scale) = columnType
                 when {
                     scale == 0 && precision > 18 ->
                         cast(field, SQLDataType.VARCHAR)
-                    scale > 0 && precision > 15 -> 
+                    scale > 0 -> 
                         cast(field, SQLDataType.VARCHAR)
                     else -> field
                 }

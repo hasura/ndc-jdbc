@@ -18,7 +18,6 @@ import org.jooq.impl.SQLDataType
 
 const val variablesCTEName = "vars"
 const val resultsCTEName = "results"
-const val variableName = "var"
 const val indexName = "idx"
 const val rowNumberName = "rn"
 
@@ -69,8 +68,19 @@ class DefaultQuery<T : ColumnType>(
 
     override fun generateAggregateQuery(): String {
         val ctx = using(getDatabaseDialect(source))
+        val aggregateFields = request.query.aggregates!!.map { (alias, aggregate) ->
+            FieldWithAlias(
+                columnType = columnTypeTojOOQType(request.collection, FieldOrAggregate.AggregateType(aggregate)),
+                field = translateIRAggregateField(aggregate),
+                alias = alias
+            )
+        }
+
         val sql = ctx
-            .select(translateIRAggregateFields(request.query.aggregates!!))
+            .select(aggregateFields
+                .withCasts(request.collection)
+                .withAliases()
+            )
             .from(
                 ctx
                     .select(asterisk())
@@ -177,7 +187,7 @@ class DefaultQuery<T : ColumnType>(
     ): Condition {
         return when (request.variables?.isNotEmpty() == true) {
             true -> {
-                val varField = field(name(variablesCTEName, variableName))
+                val varField = field(name(variablesCTEName, value.name))
                 when (operator) {
                     "_like", "_ilike" -> handleBasicComparison(field, operator, varField)
                     else -> handleBasicComparison(field, operator, varField)
@@ -260,10 +270,10 @@ class DefaultQuery<T : ColumnType>(
     }
 
     private fun createVariableFields(variableMap: Map<String, JsonElement>): Array<JooqField<*>> {
-        return variableMap.map { (_, value) ->
+        return variableMap.map { (index, value) ->
             when (value) {
-                JsonNull -> inline(null as String?).`as`(variableName)
-                else -> inline(convertJsonValue(ComparisonValue.Scalar(value))).`as`(variableName)
+                JsonNull -> inline(null as String?).`as`(index)
+                else -> inline(convertJsonValue(ComparisonValue.Scalar(value))).`as`(index)
             }
         }.toTypedArray()
     }
@@ -291,7 +301,7 @@ class DefaultQuery<T : ColumnType>(
     private fun buildPartitionFields(): Array<JooqField<*>> = arrayOf(
         rowNumber()
             .over()
-            .partitionBy(field(name(variableName)))
+            .partitionBy(field(name(indexName)))
             .orderBy(inline(1))
             .`as`(rowNumberName),
         field(name(indexName))
@@ -407,15 +417,22 @@ class DefaultQuery<T : ColumnType>(
             else -> jsonElement.toString()
         }
 
-    private data class FieldWithAlias(
+    private sealed interface FieldOrAggregate {
+        data class FieldType(val field: Field) : FieldOrAggregate
+        data class AggregateType(val aggregate: Aggregate) : FieldOrAggregate
+    }
+
+    private data class FieldWithAlias<T>(
+        val columnType: T?,
         val field: JooqField<*>,
         val alias: String
     )
 
-    private fun getFieldSelects(): List<FieldWithAlias> =
+    private fun getFieldSelects(): List<FieldWithAlias<T>> =
         request.query.fields?.map { (alias, field) ->
             when (field) {
                 is Field.Column -> FieldWithAlias(
+                    columnType = columnTypeTojOOQType(request.collection, FieldOrAggregate.FieldType(field)),
                     field = field(name(field.column)),
                     alias = alias
                 )
@@ -423,15 +440,14 @@ class DefaultQuery<T : ColumnType>(
             }
         } ?: emptyList()
     
-    private fun List<FieldWithAlias>.withCasts(collection: String): List<FieldWithAlias> =
+    private fun List<FieldWithAlias<T>>.withCasts(collection: String): List<FieldWithAlias<T>> =
         map { fieldWithAlias ->
-            val columnType = columnTypeTojOOQType(collection, Field.Column(fieldWithAlias.field.name))
             fieldWithAlias.copy(
-                field = schemaGenerator.castToSQLDataType(fieldWithAlias.field, columnType)
+                field = schemaGenerator.castToSQLDataType(fieldWithAlias.field, fieldWithAlias.columnType)
             )
         }
 
-    private fun List<FieldWithAlias>.withAliases(): List<JooqField<*>> =
+    private fun List<FieldWithAlias<T>>.withAliases(): List<JooqField<*>> =
         map { it.field.`as`(it.alias) }
 
     private fun translateIRAggregateField(field: Aggregate): AggregateFunction<*> {
@@ -469,19 +485,37 @@ class DefaultQuery<T : ColumnType>(
 
     private fun columnTypeTojOOQType(
         collection: String,
-        field: Field
-    ): T {
+        field: FieldOrAggregate
+    ): T? {
         when (field) {
-            is Field.Column -> {
+            is FieldOrAggregate.FieldType -> {
+                when (val f = field.field) {
+                    is Field.Column -> {
+                        val table = configuration.tables.find { it.name == collection }
+                            ?: error("Table $collection not found in connector configuration")
+
+                        val column = table.columns.find { it.name == f.column }
+                            ?: error("Column ${f.column} not found in table $collection")
+
+                        return column.type
+                    }
+                    else -> throw ConnectorError.NotSupported("Unsupported: Relationships are not supported")
+                }
+            }
+            is FieldOrAggregate.AggregateType -> {
                 val table = configuration.tables.find { it.name == collection }
                     ?: error("Table $collection not found in connector configuration")
+                when (val f = field.aggregate) {
+                    is Aggregate.StarCount -> return null
+                    is Aggregate.SingleColumn -> {
+                        val column = table.columns.find { it.name == f.column }
+                            ?: error("Column ${f.column} not found in table $collection")
 
-                val column = table.columns.find { it.name == field.column }
-                    ?: error("Column ${field.column} not found in table $collection")
-
-                return column.type
+                        return column.type
+                    }
+                    is Aggregate.ColumnCount -> return null
+                }
             }
-            else -> throw ConnectorError.NotSupported("Unsupported: Relationships are not supported")
         }
     }
 }
