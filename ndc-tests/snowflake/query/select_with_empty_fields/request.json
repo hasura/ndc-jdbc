@@ -1,13 +1,7 @@
 {
   "collection": "CHINOOK.CI_DATA.ALBUM",
   "query": {
-    "fields": {
-      "Title": {
-        "type": "column",
-        "column": "TITLE",
-        "arguments": {}
-      }
-    },
+    "fields": {},
     "predicate": {
       "type": "binary_comparison_operator",
       "column": {
@@ -15,10 +9,10 @@
         "name": "ALBUMID",
         "path": []
       },
-      "operator": "_eq",
+      "operator": "_in",
       "value": {
         "type": "scalar",
-        "value": 35
+        "value": [1,2,3,4,5]
       }
     }
   },

@@ -1,0 +1,41 @@
+{
+  "collection": "CHINOOK.CI_DATA.INVOICE",
+  "query": {
+    "limit": 5,
+    "fields": {
+      "InvoiceId": {
+        "type": "column",
+        "column": "INVOICEID",
+        "arguments": {}
+      },
+      "BillingState": {
+        "type": "column",
+        "column": "BILLINGSTATE",
+        "arguments": {}
+      }
+    },
+    "predicate": {
+      "type": "unary_comparison_operator",
+      "column": {
+        "type": "column",
+        "name": "BILLINGSTATE",
+        "path": []
+      },
+      "operator": "is_null"
+    },
+    "order_by": {
+      "elements": [
+        {
+          "order_direction": "asc",
+          "target": {
+            "type": "column",
+            "name": "INVOICEID",
+            "path": []
+          }
+        }
+      ]
+    }
+  },
+  "arguments": {},
+  "collection_relationships": {}
+}

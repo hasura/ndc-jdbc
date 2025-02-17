@@ -1,0 +1,12 @@
+[
+  {
+    "rows": [
+      {
+        "InvoiceId": "2",
+        "BillingAddress": "Ullevålsveien 14",
+        "InvoiceDate": "2009-01-02",
+        "Total": "3.96"
+      }
+    ]
+  }
+]

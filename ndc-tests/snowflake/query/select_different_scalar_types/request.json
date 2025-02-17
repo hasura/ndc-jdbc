@@ -1,15 +1,25 @@
 {
-  "collection": "CHINOOK.CI_DATA.ALBUM",
+  "collection": "CHINOOK.CI_DATA.INVOICE",
   "query": {
     "fields": {
-      "AlbumId": {
+      "InvoiceId": {
         "type": "column",
-        "column": "ALBUMID",
+        "column": "INVOICEID",
         "arguments": {}
       },
-      "title": {
+      "BillingAddress": {
         "type": "column",
-        "column": "TITLE",
+        "column": "BILLINGADDRESS",
+        "arguments": {}
+      },
+      "InvoiceDate": {
+        "type": "column",
+        "column": "INVOICEDATE",
+        "arguments": {}
+      },
+      "Total": {
+        "type": "column",
+        "column": "TOTAL",
         "arguments": {}
       }
     },
@@ -17,13 +27,13 @@
       "type": "binary_comparison_operator",
       "column": {
         "type": "column",
-        "name": "ALBUMID",
+        "name": "INVOICEID",
         "path": []
       },
       "operator": "_eq",
       "value": {
         "type": "scalar",
-        "value": 35
+        "value": 2
       }
     }
   },

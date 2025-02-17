@@ -1,33 +1,29 @@
 {
-  "collection": "CHINOOK.CI_DATA.ALBUM",
+  "collection": "CHINOOK.CI_DATA.INVOICE",
   "query": {
     "limit": 5,
     "fields": {
-      "AlbumId": {
+      "InvoiceId": {
         "type": "column",
-        "column": "ALBUMID",
+        "column": "INVOICEID",
         "arguments": {}
       },
-      "Title": {
+      "BillingState": {
         "type": "column",
-        "column": "TITLE",
+        "column": "BILLINGSTATE",
         "arguments": {}
       }
     },
     "predicate": {
       "type": "not",
       "expression": {
-        "type": "binary_comparison_operator",
+        "type": "unary_comparison_operator",
         "column": {
           "type": "column",
-          "name": "TITLE",
+          "name": "BILLINGSTATE",
           "path": []
         },
-        "operator": "_in",
-        "value": {
-          "type": "scalar",
-          "value": ["Balls to the Wall", "Let There Be Rock", "Something else"]
-        }
+        "operator": "is_null"
       }
     },
     "order_by": {
@@ -36,7 +32,7 @@
           "order_direction": "asc",
           "target": {
             "type": "column",
-            "name": "ALBUMID",
+            "name": "INVOICEID",
             "path": []
           }
         }

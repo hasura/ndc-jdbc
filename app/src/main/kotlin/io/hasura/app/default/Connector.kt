@@ -117,7 +117,20 @@ class DefaultConnector<T : ColumnType>(
                             variables?.isEmpty() == true -> 
                                 QueryResponse(rowSets = emptyList())
                             variables == null -> 
-                                QueryResponse(rowSets = listOf(RowSet(rows = rows, aggregates = aggregates)))
+                                QueryResponse(rowSets = listOf(RowSet(
+                                    rows = rows?.map { row ->
+                                        row.filterKeys { key -> 
+                                            request.query.fields?.containsKey(key) == true || key == indexName
+                                        }
+                                    }?.map { row ->
+                                        row.filterKeys { it != indexName }
+                                    },
+                                    aggregates = aggregates?.let { agg -> 
+                                        agg.filterKeys { key -> 
+                                            request.query.aggregates?.containsKey(key) == true 
+                                        }
+                                    }?.let { JsonObject(it) }
+                                )))
                             else -> 
                                 QueryResponse(rowSets = variables.indices.map { index ->
                                     RowSet(rows = rows?.filter { row -> 

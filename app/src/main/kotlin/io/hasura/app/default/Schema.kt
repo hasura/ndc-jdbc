@@ -40,7 +40,7 @@ abstract class DefaultSchemaGeneratorClass<T : ColumnType> : ISchemaGenerator<De
 
     abstract fun castToSQLDataType(
         field: JooqField<*>,
-        columnType: T
+        columnType: T?
     ): JooqField<*>
     
     open fun getCollections(configuration: DefaultConfiguration<T>): List<CollectionInfo> {

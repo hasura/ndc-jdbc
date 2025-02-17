@@ -23,7 +23,7 @@
       "operator": "_in",
       "value": {
         "type": "scalar",
-        "value": ["Mozart: Chamber Music", "Something else"]
+        "value": ["Mozart: Chamber Music", "Something else", "Balls to the Wall"]
       }
     }
   },
