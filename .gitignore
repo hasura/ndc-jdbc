@@ -40,3 +40,6 @@ nb-configuration.xml
 # Local environment
 .env
 .envrc.local
+
+# Hasura
+**/package.tar.gz

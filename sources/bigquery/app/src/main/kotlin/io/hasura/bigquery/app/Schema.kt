@@ -36,7 +36,7 @@ class BigQuerySchemaGenerator : DefaultSchemaGenerator<BigQueryType>() {
             else -> null
         }
         
-        return createScalarType(representationType, columnType.typeName)
+        return createScalarType(representationType, columnType)
     }
 
     override fun mapColumnDataTypeToSQLDataType(
@@ -65,7 +65,7 @@ class BigQuerySchemaGenerator : DefaultSchemaGenerator<BigQueryType>() {
 
     override fun castToSQLDataType(
         field: JooqField<*>,
-        columnType: BigQueryType
+        columnType: BigQueryType?
     ): JooqField<*> {
         return when (columnType) {
             is BigQueryType.ScalarType -> when (columnType.scalarType) {
@@ -82,14 +82,14 @@ class BigQuerySchemaGenerator : DefaultSchemaGenerator<BigQueryType>() {
     }
 
     override fun mapAggregateFunctions(
-        columnTypeStr: String,
+        columnType: BigQueryType,
         representation: TypeRepresentation?
     ): Map<String, AggregateFunctionDefinition> {
         return emptyMap()
     }
 
     override fun mapComparisonOperators(
-        columnTypeStr: String,
+        columnType: BigQueryType,
         representation: TypeRepresentation?
     ): Map<String, ComparisonOperatorDefinition> {
         return emptyMap()

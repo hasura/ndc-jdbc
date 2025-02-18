@@ -9,6 +9,9 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import org.jooq.*
+import org.jooq.conf.RenderNameCase
+import org.jooq.conf.RenderQuotedNames
+import org.jooq.conf.Settings
 import org.jooq.Field as JooqField
 import org.jooq.Query as JooqQuery
 import org.jooq.SQLDialect
@@ -17,9 +20,11 @@ import org.jooq.impl.DSL.*
 import org.jooq.impl.SQLDataType
 
 const val variablesCTEName = "vars"
-const val resultsCTEName = "results"
+const val resultsCTEName = "rlts"
 const val indexName = "idx"
 const val rowNumberName = "rn"
+const val tableName = "tb"
+const val resultTableName = "rtb"
 
 class DefaultQuery<T : ColumnType>(
     private val configuration: DefaultConfiguration<T>,
@@ -33,7 +38,8 @@ class DefaultQuery<T : ColumnType>(
     override fun generateExplainQuery(): String = "EXPLAIN ${generateBaseQuery()}"
 
     private fun generateBaseQuery(): JooqQuery {
-        val ctx = using(getDatabaseDialect(source))
+        val (dialect, settings) = getDatabaseDialect(source)
+        val ctx = using(dialect, settings)
         val sql = when {
             request.variables?.isNotEmpty() == true -> generateVariableQuery(ctx)
             else -> generateSingleQuery(ctx)
@@ -54,20 +60,25 @@ class DefaultQuery<T : ColumnType>(
 
     fun generateSingleQuery(
         ctx: DSLContext,
-    ): JooqQuery = ctx
-        .select(
-            getFieldSelects()
-                .withCasts(request.collection)
-                .withAliases()
-        )
-        .from(name(request.collection.split(".")))
-        .where(getPredicate())
-        .orderBy(getOrderByFields())
-        .limit(request.query.limit?.toInt())
-        .offset(request.query.offset?.toInt())
+    ): JooqQuery {
+        val resultsTable = table(name(request.collection.split("."))).`as`(tableName)
+
+        return ctx
+            .select(
+                getFieldSelects(resultsTable)
+                    .withCasts(request.collection)
+                    .withAliases()
+            )
+            .from(resultsTable)
+            .where(getPredicate())
+            .orderBy(getOrderByFields(tableName))
+            .limit(request.query.limit?.toInt())
+            .offset(request.query.offset?.toInt())
+    }
 
     override fun generateAggregateQuery(): String {
-        val ctx = using(getDatabaseDialect(source))
+        val (dialect, settings) = getDatabaseDialect(source)
+        val ctx = using(dialect, settings)
         val aggregateFields = request.query.aggregates!!.map { (alias, aggregate) ->
             FieldWithAlias(
                 columnType = columnTypeTojOOQType(request.collection, FieldOrAggregate.AggregateType(aggregate)),
@@ -75,11 +86,11 @@ class DefaultQuery<T : ColumnType>(
                 alias = alias
             )
         }
-
         val sql = ctx
-            .select(aggregateFields
-                .withCasts(request.collection)
-                .withAliases()
+            .select(
+                aggregateFields
+                    .withCasts(request.collection)
+                    .withAliases()
             )
             .from(
                 ctx
@@ -97,29 +108,39 @@ class DefaultQuery<T : ColumnType>(
         return sql
     }
 
-    private fun getDatabaseDialect(type: DatabaseSource): SQLDialect = when (type) {
-        DatabaseSource.SNOWFLAKE -> SQLDialect.SNOWFLAKE
-        DatabaseSource.BIGQUERY -> SQLDialect.BIGQUERY
-        DatabaseSource.REDSHIFT -> SQLDialect.REDSHIFT
+    private fun getDatabaseDialect(type: DatabaseSource): Pair<SQLDialect, Settings> = when (type) {
+        DatabaseSource.BIGQUERY -> SQLDialect.BIGQUERY to Settings()
+
+        DatabaseSource.DATABRICKS -> SQLDialect.MYSQL to Settings()
+            .withRenderFormatted(true)
+            .withRenderQuotedNames(RenderQuotedNames.EXPLICIT_DEFAULT_UNQUOTED)
+            .withRenderNameCase(RenderNameCase.AS_IS)
+
+        DatabaseSource.REDSHIFT -> SQLDialect.REDSHIFT to Settings()
+        DatabaseSource.SNOWFLAKE -> SQLDialect.SNOWFLAKE to Settings()
     }
 
     private fun getPredicate(): Condition = request.query.predicate?.let { generateCondition(it) } ?: noCondition()
 
-    private fun generateCondition(expr: Expression): Condition = when (expr) {
-        is Expression.And -> and(expr.expressions.map { generateCondition(it) })
-        is Expression.Or -> or(expr.expressions.map { generateCondition(it) })
-        is Expression.Not -> not(generateCondition(expr.expression))
-        is Expression.UnaryComparisonOperator -> handleUnaryComparison(expr)
-        is Expression.BinaryComparisonOperator -> handleBinaryComparison(expr)
+    private fun generateCondition(expr: Expression, table: Table<*>? = null): Condition = when (expr) {
+        is Expression.And -> and(expr.expressions.map { generateCondition(it, table) })
+        is Expression.Or -> or(expr.expressions.map { generateCondition(it, table) })
+        is Expression.Not -> not(generateCondition(expr.expression, table))
+        is Expression.UnaryComparisonOperator -> handleUnaryComparison(expr, table)
+        is Expression.BinaryComparisonOperator -> handleBinaryComparison(expr, table)
         is Expression.Exists -> throw ConnectorError.NotSupported("Exists queries not supported yet")
     }
 
-    private fun handleUnaryComparison(expr: Expression.UnaryComparisonOperator): Condition = when (expr.operator) {
-        UnaryComparisonOperatorType.IS_NULL -> field(name(getColumnName(expr.column))).isNull
+    private fun handleUnaryComparison(expr: Expression.UnaryComparisonOperator, table: Table<*>? = null): Condition = when (expr.operator) {
+        UnaryComparisonOperatorType.IS_NULL -> {
+            val fieldName = getColumnName(expr.column)
+            if (table != null) field(name(table.name, fieldName)).isNull else field(name(fieldName)).isNull
+        }
     }
 
-    private fun handleBinaryComparison(expr: Expression.BinaryComparisonOperator): Condition {
-        val field = field(name(getColumnName(expr.column)))
+    private fun handleBinaryComparison(expr: Expression.BinaryComparisonOperator, table: Table<*>? = null): Condition {
+        val fieldName = getColumnName(expr.column)
+        val field = if (table != null) field(name(table.name, fieldName)) else field(name(fieldName))
         
         return when (val value = expr.value) {
             is ComparisonValue.Scalar -> handleScalarComparison(field, expr.operator, value)
@@ -143,13 +164,14 @@ class DefaultQuery<T : ColumnType>(
             field,
             compareWith,
             operator.startsWith("_n"),
-            operator.contains("i"),
-            source
+            operator.contains("i")
         )
-        "_like" -> field.like(compareWith.cast(SQLDataType.VARCHAR))
-        "_ilike" -> field.likeIgnoreCase(compareWith.cast(SQLDataType.VARCHAR))
-        "_nlike" -> field.notLike(compareWith.cast(SQLDataType.VARCHAR))
-        "_nilike" -> field.notLikeIgnoreCase(compareWith.cast(SQLDataType.VARCHAR))
+        "_like", "_ilike", "_nlike", "_nilike" -> handleLikeComparison(
+            field,
+            compareWith,
+            operator.startsWith("_n"),
+            operator.contains("i")
+        )
         else -> throw ConnectorError.NotSupported("Unsupported operator: $operator")
     }
 
@@ -201,11 +223,10 @@ class DefaultQuery<T : ColumnType>(
         field: org.jooq.Field<*>,
         compareWith: org.jooq.Field<*>,
         isNegated: Boolean,
-        isCaseInsensitive: Boolean,
-        source: DatabaseSource
+        isCaseInsensitive: Boolean
     ): Condition {
-        val expr = when (getDatabaseDialect(source)) {
-            SQLDialect.SNOWFLAKE -> {
+        val expr = when (source) {
+            DatabaseSource.SNOWFLAKE -> {
                 if (isCaseInsensitive) {
                     condition("REGEXP_LIKE({0}, {1}, 'i')", field, compareWith)
                 } else {
@@ -213,7 +234,7 @@ class DefaultQuery<T : ColumnType>(
                 }
             }
             
-            SQLDialect.BIGQUERY -> {
+            DatabaseSource.BIGQUERY -> {
                 if (isCaseInsensitive) {
                     condition("REGEXP_CONTAINS(LOWER({0}), LOWER({1}))", field, compareWith)
                 } else {
@@ -221,7 +242,15 @@ class DefaultQuery<T : ColumnType>(
                 }
             }
             
-            SQLDialect.REDSHIFT -> {
+            DatabaseSource.REDSHIFT -> {
+                if (isCaseInsensitive) {
+                    condition("REGEXP_LIKE(LOWER({0}), LOWER({1}))", field, compareWith)
+                } else {
+                    condition("REGEXP_LIKE({0}, {1})", field, compareWith)
+                }
+            }
+            
+            DatabaseSource.DATABRICKS -> {
                 if (isCaseInsensitive) {
                     condition("REGEXP_LIKE(LOWER({0}), LOWER({1}))", field, compareWith)
                 } else {
@@ -234,7 +263,51 @@ class DefaultQuery<T : ColumnType>(
         return if (isNegated) not(expr) else expr
     }
 
-    private fun getOrderByFields(): List<SortField<*>> {
+    private fun handleLikeComparison(
+        field: org.jooq.Field<*>,
+        compareWith: org.jooq.Field<*>,
+        isNegated: Boolean,
+        isCaseInsensitive: Boolean
+    ): Condition {
+        val expr = when (source) {
+            DatabaseSource.SNOWFLAKE -> {
+                if (isCaseInsensitive) {
+                    field.likeIgnoreCase(compareWith.cast(SQLDataType.VARCHAR))
+                } else {
+                    field.like(compareWith.cast(SQLDataType.VARCHAR))
+                }
+            }
+            
+            DatabaseSource.BIGQUERY -> {
+                if (isCaseInsensitive) {
+                    condition("LOWER({0}) LIKE LOWER({1})", field, compareWith)
+                } else {
+                    condition("{0} LIKE {1}", field, compareWith)
+                }
+            }
+            
+            DatabaseSource.REDSHIFT -> {
+                if (isCaseInsensitive) {
+                    field.likeIgnoreCase(compareWith.cast(SQLDataType.VARCHAR))
+                } else {
+                    field.like(compareWith.cast(SQLDataType.VARCHAR))
+                }
+            }
+            
+            DatabaseSource.DATABRICKS -> {
+                if (isCaseInsensitive) {
+                    condition("LOWER({0}) LIKE LOWER({1})", field, compareWith)
+                } else {
+                    condition("{0} LIKE {1}", field, compareWith)
+                }
+            }
+            
+            else -> throw ConnectorError.NotSupported("Ilike operations not supported for this database")
+        }
+        return if (isNegated) not(expr) else expr
+    }
+
+    private fun getOrderByFields(prefix: String = ""): List<SortField<*>> {
         return request.query.orderBy?.elements?.map { element ->
             when (val target = element.target) {
                 is OrderByTarget.Column -> {
@@ -242,8 +315,8 @@ class DefaultQuery<T : ColumnType>(
                         throw ConnectorError.NotSupported("Nested fields and relationships are not supported in order by")
                     }
                     when (element.orderDirection) {
-                        OrderDirection.ASC -> field(name(target.name)).asc()
-                        OrderDirection.DESC -> field(name(target.name)).desc()
+                        OrderDirection.ASC -> field(name(listOf(prefix, target.name))).asc()
+                        OrderDirection.DESC -> field(name(listOf(prefix, target.name))).desc()
                     }
                 }
 
@@ -288,14 +361,17 @@ class DefaultQuery<T : ColumnType>(
     private fun buildResultsCTEQuery(
         varsCTE: CommonTableExpression<Record>
     ): SelectJoinStep<Record> {
-        val fields = getFieldSelects().map { it.field }.toTypedArray()
+        val fields = getFieldSelects().map { field(name(resultTableName, it.field.name)) }.toTypedArray()
         val partitionFields = buildPartitionFields()
-        val resultTable = table(name(request.collection.split("."))).`as`("rtb")
+        val resultTable = table(name(request.collection.split("."))).`as`(resultTableName)
         
-        return select(resultTable.asterisk(), *partitionFields)
+        return select(
+                field("{0}.*", Any::class.java, name(resultTable.name)), // Why doesn't resultTable.asterisk() work here?
+                *partitionFields
+            )
             .from(resultTable)
             .join(varsCTE)
-            .on(getVariablePredicate())
+            .on(getVariablePredicate(resultTable))
     }
 
     private fun buildPartitionFields(): Array<JooqField<*>> = arrayOf(
@@ -307,8 +383,8 @@ class DefaultQuery<T : ColumnType>(
         field(name(indexName))
     )
 
-    private fun getVariablePredicate(): Condition =
-        request.query.predicate?.let { generateCondition(it) }
+    private fun getVariablePredicate(table: Table<*>): Condition =
+        request.query.predicate?.let { generateCondition(it, table) }
             ?: throw ConnectorError.NotSupported("Predicate is required for variable queries")
 
     private fun getVariableJoinColumn(): String =
@@ -346,7 +422,7 @@ class DefaultQuery<T : ColumnType>(
         varsCTE: CommonTableExpression<Record>,
         resultsCTE: CommonTableExpression<Record>
     ): JooqQuery {
-        val fields = getFieldSelects()
+        val fields = getFieldSelects(resultsCTE)
             .withCasts(request.collection)
             .withAliases()
         val baseQuery = buildBaseQuery(ctx, fields, varsCTE, resultsCTE)
@@ -366,7 +442,7 @@ class DefaultQuery<T : ColumnType>(
         .select(
             *fields.toTypedArray() +
             arrayOf(
-                field(name(indexName))
+                field(name(resultsCTEName, indexName))
             )
         )
         .from(resultsCTE)
@@ -428,12 +504,16 @@ class DefaultQuery<T : ColumnType>(
         val alias: String
     )
 
-    private fun getFieldSelects(): List<FieldWithAlias<T>> =
+    private fun getFieldSelects(table: Table<*>? = null): List<FieldWithAlias<T>> =
         request.query.fields?.map { (alias, field) ->
             when (field) {
                 is Field.Column -> FieldWithAlias(
                     columnType = columnTypeTojOOQType(request.collection, FieldOrAggregate.FieldType(field)),
-                    field = field(name(field.column)),
+                    field = if (table == null) {
+                        field(name(field.column))
+                    } else {
+                        field(name(table.name, field.column))
+                    },
                     alias = alias
                 )
                 else -> throw ConnectorError.NotSupported("Unsupported: Relationships are not supported")
