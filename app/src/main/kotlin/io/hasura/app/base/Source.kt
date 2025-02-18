@@ -5,6 +5,6 @@ enum class DatabaseSource {
     BIGQUERY,
     // MYSQL,
     // ORACLE,
-    // DATABRICKS,
+    DATABRICKS,
     REDSHIFT
 }

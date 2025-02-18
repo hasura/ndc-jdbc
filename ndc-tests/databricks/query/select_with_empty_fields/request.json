@@ -1,0 +1,21 @@
+{
+  "collection": "albums",
+  "query": {
+    "fields": {},
+    "predicate": {
+      "type": "binary_comparison_operator",
+      "column": {
+        "type": "column",
+        "name": "AlbumId",
+        "path": []
+      },
+      "operator": "_in",
+      "value": {
+        "type": "scalar",
+        "value": [1,2,3,4,5]
+      }
+    }
+  },
+  "arguments": {},
+  "collection_relationships": {}
+}

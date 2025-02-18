@@ -38,5 +38,6 @@ tasks.withType<Zip>().configureEach {
 }
 
 application {
+    applicationDefaultJvmArgs = listOf("-Dnet.snowflake.jdbc.enableBouncyCastle=true")
     mainClass.set("io.hasura.snowflake.app.MainKt")
 }

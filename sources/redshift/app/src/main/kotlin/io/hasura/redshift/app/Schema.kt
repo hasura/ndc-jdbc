@@ -53,7 +53,7 @@ class RedshiftSchemaGenerator : DefaultSchemaGenerator<RedshiftDataType>() {
             else -> null
         }
         
-        return createScalarType(representationType, columnType.typeName)
+        return createScalarType(representationType, columnType)
     }
 
     override fun mapColumnDataTypeToSQLDataType(
@@ -85,7 +85,7 @@ class RedshiftSchemaGenerator : DefaultSchemaGenerator<RedshiftDataType>() {
 
     override fun castToSQLDataType(
         field: JooqField<*>,
-        columnType: RedshiftDataType
+        columnType: RedshiftDataType?
     ): JooqField<*> {
         return when (columnType) {
             is RedshiftDataType.DECIMAL -> {
@@ -93,7 +93,7 @@ class RedshiftSchemaGenerator : DefaultSchemaGenerator<RedshiftDataType>() {
                 when {
                     scale == 0 && precision > 18 ->
                         cast(field, SQLDataType.VARCHAR)
-                    scale > 0 && precision > 15 -> 
+                    scale > 0 ->
                         cast(field, SQLDataType.VARCHAR)
                     else -> field
                 }
