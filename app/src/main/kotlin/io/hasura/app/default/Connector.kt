@@ -98,15 +98,22 @@ class DefaultConnector<T : ColumnType>(
                         val queryExecutor = DefaultConnection(state.client)
 
                         // Handle regular query results
-                        val rows = request.query.fields?.let { 
-                            queryExecutor.executeQuery(query.generateQuery())
+                        val rowsAsync = async {
+                            request.query.fields?.let {
+                                queryExecutor.executeQuery(query.generateQuery())
+                            }
                         }
 
                         // Handle aggregates if present
-                        val aggregates = request.query.aggregates?.let {
-                            queryExecutor.executeQuery(query.generateAggregateQuery())
-                                .firstOrNull()?.let { JsonObject(it) }
+                        val aggregatesAsync = async {
+                            request.query.aggregates?.let {
+                                queryExecutor.executeQuery(query.generateAggregateQuery())
+                                    .firstOrNull()?.let { JsonObject(it) }
+                            }
                         }
+
+                        val rows = rowsAsync.await()
+                        val aggregates = aggregatesAsync.await()
 
                         ConnectorLogger.logger.debug("Request: $request")
                         ConnectorLogger.logger.debug("Rows: $rows")
@@ -114,27 +121,27 @@ class DefaultConnector<T : ColumnType>(
 
                         val variables = request.variables
                         when {
-                            variables?.isEmpty() == true -> 
+                            variables?.isEmpty() == true ->
                                 QueryResponse(rowSets = emptyList())
-                            variables == null -> 
+                            variables == null ->
                                 QueryResponse(rowSets = listOf(RowSet(
                                     rows = rows?.map { row ->
-                                        row.filterKeys { key -> 
+                                        row.filterKeys { key ->
                                             request.query.fields?.containsKey(key) == true || key == indexName
                                         }
                                     }?.map { row ->
                                         row.filterKeys { it != indexName }
                                     },
-                                    aggregates = aggregates?.let { agg -> 
-                                        agg.filterKeys { key -> 
-                                            request.query.aggregates?.containsKey(key) == true 
+                                    aggregates = aggregates?.let { agg ->
+                                        agg.filterKeys { key ->
+                                            request.query.aggregates?.containsKey(key) == true
                                         }
                                     }?.let { JsonObject(it) }
                                 )))
-                            else -> 
+                            else ->
                                 QueryResponse(rowSets = variables.indices.map { index ->
-                                    RowSet(rows = rows?.filter { row -> 
-                                        row[indexName]?.toString()?.toIntOrNull() == index 
+                                    RowSet(rows = rows?.filter { row ->
+                                        row[indexName]?.toString()?.toIntOrNull() == index
                                     }?.map { row ->
                                         row.filterKeys { it != indexName }
                                     })
