@@ -203,7 +203,9 @@ class UpdateCommand : Subcommand("update", "Update configuration file") {
         } else {
             ConnectionUri(value = jdbcUrl)
         }
-        val config = SnowflakeConfiguration(connectionUri, schemas?.split(",") ?: emptyList())
+        // If schemas is empty string or null do empty list
+        val cleanedSchemas = schemas?.takeIf { it.isNotEmpty() }?.split(",") ?: emptyList()
+        val config = SnowflakeConfiguration(connectionUri, cleanedSchemas)
         val generatedConfig = SnowflakeConfigGenerator.generateConfig(config)
 
         // Use the shared Json formatter
@@ -225,11 +227,20 @@ class UpdateCommand : Subcommand("update", "Update configuration file") {
 fun main(args: Array<String>) {
     val parser = ArgParser("update", strictSubcommandOptionsOrder = true)
     parser.subcommands(UpdateCommand())
+    
+    val modifiedArgs = args.toMutableList()
+    val schemasIndex = modifiedArgs.indexOf("--schemas")
+    if (schemasIndex != -1 && schemasIndex + 1 < modifiedArgs.size) {
+        val nextArg = modifiedArgs.getOrNull(schemasIndex + 1)
+        if (nextArg?.startsWith("-") == true) {
+            modifiedArgs.add(schemasIndex + 1, "")
+        }
+    }
 
-    if (args.isEmpty()) {
+    if (modifiedArgs.isEmpty()) {
         println("Subcommand is required (ex: update)")
         exitProcess(1)
     }
 
-    parser.parse(args)
+    parser.parse(modifiedArgs.toTypedArray())
 }

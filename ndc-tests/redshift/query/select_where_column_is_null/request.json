@@ -1,0 +1,41 @@
+{
+  "collection": "invoices",
+  "query": {
+    "limit": 5,
+    "fields": {
+      "InvoiceId": {
+        "type": "column",
+        "column": "InvoiceId",
+        "arguments": {}
+      },
+      "BillingState": {
+        "type": "column",
+        "column": "BillingState",
+        "arguments": {}
+      }
+    },
+    "predicate": {
+      "type": "unary_comparison_operator",
+      "column": {
+        "type": "column",
+        "name": "BillingState",
+        "path": []
+      },
+      "operator": "is_null"
+    },
+    "order_by": {
+      "elements": [
+        {
+          "order_direction": "asc",
+          "target": {
+            "type": "column",
+            "name": "InvoiceId",
+            "path": []
+          }
+        }
+      ]
+    }
+  },
+  "arguments": {},
+  "collection_relationships": {}
+}

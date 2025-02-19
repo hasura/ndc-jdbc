@@ -1,0 +1,9 @@
+[
+  {
+    "aggregates": {
+      "how_many_invoices": 20,
+      "min_invoice_id": 377,
+      "max_invoice_id": 396
+    }
+  }
+]

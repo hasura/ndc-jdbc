@@ -1,4 +1,10 @@
-.PHONY: build run-snowflake run-bigquery run-mysql run-oracle run-databricks run-redshift build-snowflake
+.PHONY: build \
+    run-snowflake run-bigquery run-mysql run-oracle run-databricks run-redshift \
+    docker-snowflake docker-snowflake-app docker-snowflake-cli \
+    publish-snowflake publish-snowflake-app publish-snowflake-cli \
+    docker-bigquery docker-bigquery-app docker-bigquery-cli \
+    docker-redshift docker-redshift-app docker-redshift-cli \
+    docker-databricks docker-databricks-app docker-databricks-cli
 
 build:
 	./gradlew build
@@ -45,22 +51,38 @@ run-redshift:
 	HASURA_CONFIGURATION_DIRECTORY=../../../configs/redshift \
 	./gradlew :sources:redshift:app:run
 
-build-snowflake:
+docker-snowflake:
 ifndef VERSION
 	$(error VERSION is not set. Please set VERSION before running this target)
 endif
-	docker buildx \
+	docker-snowflake-app
+	docker-snowflake-cli
+
+docker-snowflake-app:
+ifndef VERSION
+	$(error VERSION is not set. Please set VERSION before running this target)
+endif
+	docker build \
 		--build-arg SOURCE=snowflake \
 		--build-arg JOOQ_PRO_EMAIL="${JOOQ_PRO_EMAIL}" \
 		--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
 		-f ./Dockerfile.app \
 		-t ndc-snowflake-jdbc:v${VERSION} .
+
+docker-snowflake-cli:
+ifndef VERSION
+	$(error VERSION is not set. Please set VERSION before running this target)
+endif
 	docker build \
 		--build-arg SOURCE=snowflake \
 		--build-arg JOOQ_PRO_EMAIL="${JOOQ_PRO_EMAIL}" \
 		--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
 		-f ./Dockerfile.cli \
 		-t ndc-snowflake-jdbc-cli:v${VERSION} .
+
+publish-snowflake:
+	publish-snowflake-app
+	publish-snowflake-cli
 
 publish-snowflake-app:
 ifndef VERSION
@@ -90,7 +112,11 @@ endif
 		-t ghcr.io/hasura/ndc-snowflake-jdbc-cli:v${VERSION} \
 		--push .
 
-build-bigquery:
+docker-bigquery:
+	docker-bigquery-app
+	docker-bigquery-cli
+
+docker-bigquery-app:
 ifndef VERSION
 	$(error VERSION is not set. Please set VERSION before running this target)
 endif
@@ -100,6 +126,11 @@ endif
 		--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
 		-f ./Dockerfile.app \
 		-t ndc-bigquery-jdbc:v${VERSION} .
+
+docker-bigquery-cli:
+ifndef VERSION
+	$(error VERSION is not set. Please set VERSION before running this target)
+endif
 	docker build \
 		--build-arg SOURCE=bigquery \
 		--build-arg JOOQ_PRO_EMAIL="${JOOQ_PRO_EMAIL}" \
@@ -107,7 +138,11 @@ endif
 		-f ./Dockerfile.cli \
 		-t ndc-bigquery-jdbc-cli:v${VERSION} .
 
-build-redshift:
+docker-redshift:
+	docker-redshift-app
+	docker-redshift-cli
+
+docker-redshift-app:
 ifndef VERSION
 	$(error VERSION is not set. Please set VERSION before running this target)
 endif
@@ -117,9 +152,41 @@ endif
 		--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
 		-f ./Dockerfile.app \
 		-t ndc-redshift-jdbc:v${VERSION} .
+
+docker-redshift-cli:
+ifndef VERSION
+	$(error VERSION is not set. Please set VERSION before running this target)
+endif
 	docker build \
 		--build-arg SOURCE=redshift \
 		--build-arg JOOQ_PRO_EMAIL="${JOOQ_PRO_EMAIL}" \
 		--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
 		-f ./Dockerfile.cli \
 		-t ndc-redshift-jdbc-cli:v${VERSION} .
+
+docker-databricks:
+	docker-databricks-app
+	docker-databricks-cli
+
+docker-databricks-app:
+ifndef VERSION
+	$(error VERSION is not set. Please set VERSION before running this target)
+endif
+	docker build \
+		--build-arg SOURCE=databricks \
+		--build-arg JOOQ_PRO_EMAIL="${JOOQ_PRO_EMAIL}" \
+		--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
+		-f ./Dockerfile.app \
+		-t ndc-databricks-jdbc:v${VERSION} .
+
+docker-databricks-cli:
+ifndef VERSION
+	$(error VERSION is not set. Please set VERSION before running this target)
+endif
+	docker build \
+		--build-arg SOURCE=databricks \
+		--build-arg JOOQ_PRO_EMAIL="${JOOQ_PRO_EMAIL}" \
+		--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
+		-f ./Dockerfile.cli \
+		-t ndc-databricks-jdbc-cli:v${VERSION} .
+
