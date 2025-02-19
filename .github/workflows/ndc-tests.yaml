@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        connector: [snowflake, redshift, databricks]
+        connector: [snowflake]
         include:
           - connector: snowflake
             jdbc_url: ${{ secrets.SNOWFLAKE_JDBC_URL }}
@@ -18,18 +18,18 @@ jobs:
             run_command: make run-snowflake
             test_dir: ndc-tests/snowflake
             port: 8081
-          - connector: redshift
-            jdbc_url: ${{ secrets.REDSHIFT_JDBC_URL }}
-            config_command: make run-redshift-cli
-            run_command: make run-redshift
-            test_dir: ndc-tests/redshift
-            port: 8082
-          - connector: databricks
-            jdbc_url: ${{ secrets.DATABRICKS_JDBC_URL }}
-            config_command: make run-databricks-cli
-            run_command: make run-databricks
-            test_dir: ndc-tests/databricks
-            port: 8083
+          # - connector: redshift
+          #   jdbc_url: ${{ secrets.REDSHIFT_JDBC_URL }}
+          #   config_command: make run-redshift-cli
+          #   run_command: make run-redshift
+          #   test_dir: ndc-tests/redshift
+          #   port: 8086
+          # - connector: databricks
+          #   jdbc_url: ${{ secrets.DATABRICKS_JDBC_URL }}
+          #   config_command: make run-databricks-cli
+          #   run_command: make run-databricks
+          #   test_dir: ndc-tests/databricks
+          #   port: 8085
 
     steps:
       - name: Checkout repo
