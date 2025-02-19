@@ -1,4 +1,4 @@
-.PHONY: build run-snowflake run-bigquery run-mysql run-oracle run-databricks run-redshift build-snowflake
+.PHONY: build run-snowflake run-bigquery run-mysql run-oracle run-databricks run-redshift build-snowflake run-snowflake-cli
 
 build:
 	./gradlew build
@@ -9,6 +9,12 @@ run-snowflake:
 	HASURA_CONNECTOR_PORT=8081 \
 	HASURA_CONFIGURATION_DIRECTORY=../../../configs/snowflake \
 	./gradlew :sources:snowflake:app:run
+
+run-snowflake-cli:
+ifndef JDBC_URL
+	$(error JDBC_URL environment variable is not set)
+endif
+	./gradlew ':sources:snowflake:cli:run' --args="update --jdbc-url JDBC_URL --outfile ../../../configs/snowflake/configuration.json"
 
 run-bigquery:
 	OTEL_SERVICE_NAME=ndc-bigquery \
