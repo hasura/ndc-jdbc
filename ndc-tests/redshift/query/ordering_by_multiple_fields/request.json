@@ -1,0 +1,36 @@
+{
+  "collection": "albums",
+  "query": {
+    "fields": {
+      "Title": {
+        "type": "column",
+        "column": "title",
+        "arguments": {}
+      }
+    },
+    "limit": 10,
+    "offset": 10,
+    "order_by": {
+      "elements": [
+        {
+          "order_direction": "asc",
+          "target": {
+            "type": "column",
+            "name": "artistid",
+            "path": []
+          }
+        },
+        {
+          "order_direction": "desc",
+          "target": {
+            "type": "column",
+            "name": "title",
+            "path": []
+          }
+        }
+      ]
+    }
+  },
+  "arguments": {},
+  "collection_relationships": {}
+}

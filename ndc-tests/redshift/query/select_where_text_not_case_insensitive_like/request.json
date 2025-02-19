@@ -1,0 +1,45 @@
+{
+  "collection": "albums",
+  "query": {
+    "limit": 5,
+    "fields": {
+      "Title": {
+        "type": "column",
+        "column": "title",
+        "arguments": {}
+      }
+    },
+    "predicate": {
+      "type": "and",
+      "expressions": [
+        {
+          "type": "binary_comparison_operator",
+          "column": {
+            "type": "column",
+            "name": "title",
+            "path": []
+          },
+          "operator": "_nilike",
+          "value": {
+            "type": "scalar",
+            "value": "%All%"
+          }
+        }
+      ]
+    },
+    "order_by": {
+      "elements": [
+        {
+          "order_direction": "asc",
+          "target": {
+            "type": "column",
+            "name": "albumid",
+            "path": []
+          }
+        }
+      ]
+    }
+  },
+  "arguments": {},
+  "collection_relationships": {}
+}

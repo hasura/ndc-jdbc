@@ -77,6 +77,18 @@ class DefaultConnector<T : ColumnType>(
         }
     }
 
+    fun cleanUpRows(request: QueryRequest, rows: List<Map<String, JsonElement>>?): List<Map<String, JsonElement>>? {
+        return rows?.map { row ->
+            row.entries.mapNotNull { (key, value) -> 
+                request.query.fields?.keys?.find { it.equals(key, ignoreCase = true) }?.let { matchedKey ->
+                    matchedKey to value
+                }
+            }.toMap()
+        }?.map { row ->
+            row.filterKeys { it != indexName }
+        }
+    }
+
     override suspend fun query(
         configuration: DefaultConfiguration<T>,
         state: DefaultState<T>,
@@ -94,7 +106,6 @@ class DefaultConnector<T : ColumnType>(
                             source,
                             request
                         )
-
                         val queryExecutor = DefaultConnection(state.client)
 
                         // Handle regular query results
@@ -125,25 +136,19 @@ class DefaultConnector<T : ColumnType>(
                                 QueryResponse(rowSets = emptyList())
                             variables == null ->
                                 QueryResponse(rowSets = listOf(RowSet(
-                                    rows = rows?.map { row ->
-                                        row.filterKeys { key ->
-                                            request.query.fields?.containsKey(key) == true || key == indexName
-                                        }
-                                    }?.map { row ->
-                                        row.filterKeys { it != indexName }
-                                    },
-                                    aggregates = aggregates?.let { agg ->
-                                        agg.filterKeys { key ->
-                                            request.query.aggregates?.containsKey(key) == true
+                                    rows = cleanUpRows(request, rows),
+                                    aggregates = aggregates?.let { agg -> 
+                                        agg.filterKeys { key -> 
+                                            request.query.aggregates?.containsKey(key) == true 
                                         }
                                     }?.let { JsonObject(it) }
                                 )))
                             else ->
                                 QueryResponse(rowSets = variables.indices.map { index ->
-                                    RowSet(rows = rows?.filter { row ->
-                                        row[indexName]?.toString()?.toIntOrNull() == index
-                                    }?.map { row ->
-                                        row.filterKeys { it != indexName }
+                                    RowSet(rows = rows?.filter { row -> 
+                                        row[indexName]?.toString()?.toIntOrNull() == index 
+                                    }?.let { filteredRows ->
+                                        cleanUpRows(request, filteredRows)
                                     })
                                 })
                         }
