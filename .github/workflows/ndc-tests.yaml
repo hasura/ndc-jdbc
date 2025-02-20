@@ -76,7 +76,7 @@ jobs:
           fi
 
           echo "Parsing NUMBER scalar type..."
-          curl -s http://localhost:8081/schema | jq .scalar_types.NUMBER
+          curl -s http://localhost:8081/schema | jq .scalar_types.NUMBER.representation
 
       - name: Run Tests
         id: run_tests
