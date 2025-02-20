@@ -3,7 +3,7 @@
 A Hasura Native Data Connector (NDC) implementation for JDBC databases, currently supporting:
 
 - Snowflake
-- BigQuery 
+- BigQuery
 - Redshift
 
 ## Overview
@@ -20,6 +20,17 @@ This connector allows Hasura to connect to various JDBC data sources using a com
   - Sorting
   - Pagination
 - Configuration via JSON and environment variables
+
+## Requirements
+
+1. Java 21 or higher
+2. Environment variables
+
+```
+export JDBC_URL="your_jdbc_connection_string"
+export JOOQ_PRO_EMAIL="<jooq_pro_email>"
+export JOOQ_PRO_LICENSE="<jooq_pro_license>"
+```
 
 ## Usage
 
@@ -75,3 +86,24 @@ To add support for a new database:
    - Any database-specific optimizations
 3. Add the new source to the `DatabaseSource` enum
 4. Register the connector in `Main.kt`
+
+## Testing
+
+### NDC (Native Database Connector) Tests
+
+The repository includes automated testing infrastructure for validating NDC functionality across different database connectors.
+
+#### GitHub Actions CI
+
+Tests automatically run on pull requests targeting the main branch. The workflow:
+1. Generates connector configuration
+2. Starts the connector service
+3. Runs NDC test suite against the running connector
+4. Collects and uploads logs as artifacts
+
+#### Local Development Testing
+
+For local testing, use the provided test script:
+
+```bash
+./scripts/run-ndc-tests.sh <connector>
