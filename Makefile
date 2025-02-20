@@ -4,7 +4,9 @@
     publish-snowflake publish-snowflake-app publish-snowflake-cli \
     docker-bigquery docker-bigquery-app docker-bigquery-cli \
     docker-redshift docker-redshift-app docker-redshift-cli \
-    docker-databricks docker-databricks-app docker-databricks-cli
+    docker-databricks docker-databricks-app docker-databricks-cli \
+    run-snowflake-cli
+
 
 build:
 	./gradlew build
@@ -15,6 +17,12 @@ run-snowflake:
 	HASURA_CONNECTOR_PORT=8081 \
 	HASURA_CONFIGURATION_DIRECTORY=../../../configs/snowflake \
 	./gradlew :sources:snowflake:app:run
+
+run-snowflake-introspection:
+ifndef JDBC_URL
+	$(error JDBC_URL environment variable is not set)
+endif
+	./gradlew ':sources:snowflake:cli:run' --args="update --jdbc-url JDBC_URL --outfile ../../../configs/snowflake/configuration.json"
 
 run-bigquery:
 	OTEL_SERVICE_NAME=ndc-bigquery \
@@ -189,4 +197,3 @@ endif
 		--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
 		-f ./Dockerfile.cli \
 		-t ndc-databricks-jdbc-cli:v${VERSION} .
-
