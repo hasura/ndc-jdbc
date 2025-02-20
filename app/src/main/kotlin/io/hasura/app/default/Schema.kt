@@ -19,7 +19,9 @@ abstract class DefaultSchemaGeneratorClass<T : ColumnType> : ISchemaGenerator<De
     }
 
     abstract fun getScalars(configuration: DefaultConfiguration<T>): Map<String, ScalarType>
-    
+
+    abstract fun generateScalarName(columnType: T): String
+
     abstract fun mapToTypeRepresentation(
         columnType: T
     ): ScalarType
@@ -42,7 +44,7 @@ abstract class DefaultSchemaGeneratorClass<T : ColumnType> : ISchemaGenerator<De
         field: JooqField<*>,
         columnType: T?
     ): JooqField<*>
-    
+
     open fun getCollections(configuration: DefaultConfiguration<T>): List<CollectionInfo> {
         return configuration.tables.map { table ->
             CollectionInfo(
@@ -94,12 +96,18 @@ abstract class DefaultSchemaGenerator<T : ColumnType> : DefaultSchemaGeneratorCl
     override fun getScalars(configuration: DefaultConfiguration<T>): Map<String, ScalarType> {
         val scalarTypes = configuration.tables.flatMap { table ->
             table.columns.map { column ->
-                column.type to mapToTypeRepresentation(column.type)
+                generateScalarName(column.type) to mapToTypeRepresentation(column.type)
             }
         }.distinct()
+
+
         return scalarTypes.associate { (columnType, representation) ->
-            columnType.typeName to representation
+            columnType to representation
         }
+    }
+
+    override fun generateScalarName(columnType: T): String {
+        return columnType.typeName
     }
 
     override fun mapAggregateFunctions(

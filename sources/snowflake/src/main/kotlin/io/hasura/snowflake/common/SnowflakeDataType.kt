@@ -24,7 +24,7 @@ sealed class SnowflakeDataType : ColumnType {
     @Serializable
     @SerialName("DATE")
     object DATE : SnowflakeDataType()
-    
+
     @Serializable
     @SerialName("FLOAT")
     object FLOAT : SnowflakeDataType()
@@ -78,7 +78,21 @@ sealed class SnowflakeDataType : ColumnType {
 
     override val typeName: String
         get() = when (this) {
-            is NUMBER -> "NUMBER"
+            is NUMBER -> {
+                val (precision, scale) = this
+                when {
+                    scale == 0 ->
+                        when {
+                            precision <= 2 -> "INT_8"
+                            precision <= 4 -> "INT_16"
+                            precision <= 9 -> "INT_32"
+                            precision <= 18 -> "INT_64"
+                            else -> "BIGINTEGER"
+                        }
+                    scale > 0 -> "BIGDECIMAL"
+                    else -> "BIGDECIMAL"
+                }
+            }
             else -> this::class.simpleName?.uppercase() ?: "UNKNOWN"
         }
 }
