@@ -89,7 +89,7 @@ sealed class SnowflakeDataType : ColumnType {
                             precision <= 18 -> "INT_64"
                             else -> "BIGINTEGER"
                         }
-                    scale > 0 -> "BIG_DECIMAL"
+                    scale > 0 -> "BIGDECIMAL"
                     else -> "BIGDECIMAL"
                 }
             }
