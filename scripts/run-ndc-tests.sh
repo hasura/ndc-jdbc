@@ -148,16 +148,7 @@ timeout 30 bash -c "while ! nc -z localhost $PORT; do sleep 1; done" || {
 
 # Run tests
 echo "Running tests for $CONNECTOR..."
-curl -L --fail -o ndc-test-temp https://github.com/hasura/ndc-spec/releases/download/v0.1.6/ndc-test-x86_64-unknown-linux-gnu
-chmod +x ndc-test-temp
-#sudo mv ndc-test /usr/local/bin/
-
-docker run --rm --network="host" -v $(pwd):/app -w /app ubuntu:22.04 bash -c "\
-  apt-get update && \
-  apt-get install -y curl && \
-  curl -L --fail -o ndc-test-temp https://github.com/hasura/ndc-spec/releases/download/v0.1.6/ndc-test-x86_64-unknown-linux-gnu && \
-  chmod +x ndc-test-temp && \
-  ./ndc-test-temp replay --endpoint http://localhost:8081 --snapshots-dir ndc-tests/snowflake"
+ndc-test replay --endpoint "http://localhost:$PORT" --snapshots-dir "$TEST_DIR" 2>&1 | tee test-output.log
 
 # Check test results
 if [ ${PIPESTATUS[0]} -eq 1 ]; then
