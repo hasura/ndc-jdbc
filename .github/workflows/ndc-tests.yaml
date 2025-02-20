@@ -65,6 +65,11 @@ jobs:
             exit 1
           }
 
+      - name: Print schema
+        id: print_schema
+        run: |
+          curl http://localhost:8081/schema | jq .scalar_types.NUMBER
+
       - name: Run Tests
         id: run_tests
         run: |
