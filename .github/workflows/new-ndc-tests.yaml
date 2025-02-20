@@ -1,0 +1,118 @@
+name: NDC tests for ndc-jdbc connectors
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate-test-cases:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        connector: [snowflake]
+        include:
+          - connector: snowflake
+            jdbc_url_env: SNOWFLAKE_JDBC_URL
+            config_command: make run-snowflake-cli
+            run_command: make run-snowflake
+            test_dir: ndc-tests/snowflake
+            port: 8081
+          # - connector: redshift
+          #   jdbc_url: ${{ secrets.REDSHIFT_JDBC_URL }}
+          #   config_command: make run-redshift-cli
+          #   run_command: make run-redshift
+          #   test_dir: ndc-tests/redshift
+          #   port: 8086
+          # - connector: databricks
+          #   jdbc_url: ${{ secrets.DATABRICKS_JDBC_URL }}
+          #   config_command: make run-databricks-cli
+          #   run_command: make run-databricks
+          #   test_dir: ndc-tests/databricks
+          #   port: 8085
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Download and Setup NDC Test
+        working-directory: static/relational/postgres
+        run: |
+          curl -L --fail -o ndc-test https://github.com/hasura/ndc-spec/releases/download/v0.1.6/ndc-test-x86_64-unknown-linux-gnu
+          chmod +x ndc-test
+          sudo mv ndc-test /usr/local/bin/
+
+      - name: Generate configuration
+        env:
+          JDBC_URL: ${{ secrets[matrix.jdbc_url_env] }}
+        run: |
+          ${{ matrix.config_command }} > config-generation.log 2>&1 || {
+            echo "Configuration generation failed for ${{ matrix.connector }}. Last 50 lines of log:"
+            tail -n 50 config-generation.log
+            exit 1
+          }
+
+      - name: Run the connector
+        env:
+          JDBC_URL: ${{ secrets[matrix.jdbc_url_env] }}
+        run: |
+          ${{ matrix.run_command }} > connector.log 2>&1 &
+          echo "SERVER_PID=$!" >> $GITHUB_ENV
+
+          echo "Waiting for the ${{ matrix.connector }} connector to be ready..."
+          timeout 30 bash -c 'while ! nc -z localhost ${{ matrix.port }}; do sleep 1; done' || {
+            echo "Connector failed to start. Last 50 lines of log:"
+            tail -n 50 connector.log
+            exit 1
+          }
+
+      - name: Run Tests
+        id: run_tests
+        continue-on-error: true
+        run: |
+          ndc-test replay --endpoint http://localhost:${{ matrix.port }} --snapshots-dir ${{ matrix.test_dir }} 2>&1 | tee test-output.log
+
+      - name: Post test results to PR
+        if: steps.run_tests.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const testOutput = fs.readFileSync('test-output.log', 'utf8');
+            const body = `❌ NDC Test Cases Failed for ${{ matrix.connector }}:\n\n\`\`\`\n${testOutput}\n\`\`\``;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
+
+      - name: Stop Connector
+        if: always()
+        run: |
+          if [ ! -z "${{ env.SERVER_PID }}" ]; then
+            kill ${{ env.SERVER_PID }} || true
+            sleep 2
+            kill -9 ${{ env.SERVER_PID }} || true
+          fi
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.connector }}-logs
+          path: |
+            config-generation.log
+            connector.log
+            test-output.log
+          retention-days: 5
+
+      - name: Exit with test status
+        if: steps.run_tests.outcome == 'failure'
+        run: exit 1
+
+permissions:
+  contents: read
+  pull-requests: write
