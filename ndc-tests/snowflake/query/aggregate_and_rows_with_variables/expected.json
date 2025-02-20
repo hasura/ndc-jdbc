@@ -1,0 +1,162 @@
+[
+  {
+    "aggregates": {
+      "albumId_sum": "9",
+      "albumId_avg": "9.000000",
+      "albumId_max": "9",
+      "albumId_min": "9"
+    },
+    "rows": [
+      {
+        "ALBUMID": "9",
+        "TITLE": "Plays Metallica By Four Cellos"
+      }
+    ]
+  },
+  {
+    "aggregates": {
+      "albumId_sum": "12",
+      "albumId_avg": "12.000000",
+      "albumId_max": "12",
+      "albumId_min": "12"
+    },
+    "rows": [
+      {
+        "ALBUMID": "12",
+        "TITLE": "BackBeat Soundtrack"
+      }
+    ]
+  },
+  {
+    "aggregates": {
+      "albumId_sum": "7",
+      "albumId_avg": "7.000000",
+      "albumId_max": "7",
+      "albumId_min": "7"
+    },
+    "rows": [
+      {
+        "ALBUMID": "7",
+        "TITLE": "Facelift"
+      }
+    ]
+  },
+  {
+    "aggregates": {
+      "albumId_sum": "5",
+      "albumId_avg": "2.500000",
+      "albumId_max": "3",
+      "albumId_min": "2"
+    },
+    "rows": [
+      {
+        "ALBUMID": "2",
+        "TITLE": "Balls to the Wall"
+      },
+      {
+        "ALBUMID": "3",
+        "TITLE": "Restless and Wild"
+      }
+    ]
+  },
+  {
+    "aggregates": {
+      "albumId_sum": "13",
+      "albumId_avg": "13.000000",
+      "albumId_max": "13",
+      "albumId_min": "13"
+    },
+    "rows": [
+      {
+        "ALBUMID": "13",
+        "TITLE": "The Best Of Billy Cobham"
+      }
+    ]
+  },
+  {
+    "aggregates": {
+      "albumId_sum": "5",
+      "albumId_avg": "2.500000",
+      "albumId_max": "4",
+      "albumId_min": "1"
+    },
+    "rows": [
+      {
+        "ALBUMID": "1",
+        "TITLE": "For Those About To Rock We Salute You"
+      },
+      {
+        "ALBUMID": "4",
+        "TITLE": "Let There Be Rock"
+      }
+    ]
+  },
+  {
+    "aggregates": {
+      "albumId_sum": "6",
+      "albumId_avg": "6.000000",
+      "albumId_max": "6",
+      "albumId_min": "6"
+    },
+    "rows": [
+      {
+        "ALBUMID": "6",
+        "TITLE": "Jagged Little Pill"
+      }
+    ]
+  },
+  {
+    "aggregates": {
+      "albumId_sum": "42",
+      "albumId_avg": "21.000000",
+      "albumId_max": "34",
+      "albumId_min": "8"
+    },
+    "rows": [
+      {
+        "ALBUMID": "8",
+        "TITLE": "Warner 25 Anos"
+      },
+      {
+        "ALBUMID": "34",
+        "TITLE": "Chill: Brazil (Disc 2)"
+      }
+    ]
+  },
+  {
+    "aggregates": {
+      "albumId_sum": "292",
+      "albumId_avg": "97.333333",
+      "albumId_max": "271",
+      "albumId_min": "10"
+    },
+    "rows": [
+      {
+        "ALBUMID": "10",
+        "TITLE": "Audioslave"
+      },
+      {
+        "ALBUMID": "11",
+        "TITLE": "Out Of Exile"
+      },
+      {
+        "ALBUMID": "271",
+        "TITLE": "Revelations"
+      }
+    ]
+  },
+  {
+    "aggregates": {
+      "albumId_sum": "5",
+      "albumId_avg": "5.000000",
+      "albumId_max": "5",
+      "albumId_min": "5"
+    },
+    "rows": [
+      {
+        "ALBUMID": "5",
+        "TITLE": "Big Ones"
+      }
+    ]
+  }
+]
