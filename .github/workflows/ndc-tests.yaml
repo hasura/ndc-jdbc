@@ -47,6 +47,7 @@ jobs:
             tail -n 50 config-generation.log
             exit 1
           }
+          cat configs/${{ matrix.connector }}/configuration.json
 
       - name: Run the connector
         env:
