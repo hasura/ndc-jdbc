@@ -47,7 +47,6 @@ jobs:
             tail -n 50 config-generation.log
             exit 1
           }
-          cat configs/${{ matrix.connector }}/configuration.json
 
       - name: Run the connector
         env:
@@ -64,19 +63,6 @@ jobs:
             tail -n 50 connector.log
             exit 1
           }
-
-      - name: Print schema
-        id: print_schema
-        run: |
-          echo "Checking schema endpoint..."
-          code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8081/schema)
-          if [ "$code" != "200" ]; then
-            echo "Error: Server returned HTTP $code"
-            exit 1
-          fi
-
-          echo "Parsing NUMBER scalar type..."
-          curl -s http://localhost:8081/schema | jq .scalar_types.NUMBER.representation
 
       - name: Run Tests
         id: run_tests
