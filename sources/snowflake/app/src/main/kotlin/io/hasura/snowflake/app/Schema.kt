@@ -15,26 +15,28 @@ class SnowflakeSchemaGenerator : DefaultSchemaGenerator<SnowflakeDataType>() {
     ): ScalarType {
         val representationType = when (columnType) {
             is SnowflakeDataType.NUMBER -> {
-                val (precision, scale) = columnType
-                when {
-                    scale == 0 -> when {
-                        precision <= 2 -> RepresentationType.Int8
-                        precision <= 4 -> RepresentationType.Int16
-                        precision <= 9 -> RepresentationType.Int32
-                        precision <= 18 -> RepresentationType.Int64
-                        else -> RepresentationType.Biginteger
-                    }
-                    scale > 0 -> RepresentationType.Bigdecimal
-                    else -> RepresentationType.Bigdecimal
-                }
+              val (precision, scale) = columnType
+              when {
+                  scale == 0 ->
+                  when {
+                      precision <= 2 -> RepresentationType.Int8
+                      precision <= 4 -> RepresentationType.Int16
+                      precision <= 9 -> RepresentationType.Int32
+                      precision <= 18 -> RepresentationType.Int64
+                      else -> RepresentationType.Biginteger
+                  }
+                  scale > 0 -> RepresentationType.Bigdecimal
+                  else -> RepresentationType.Bigdecimal
+              }
             }
+
             SnowflakeDataType.FLOAT -> RepresentationType.Float64
             SnowflakeDataType.TEXT -> RepresentationType.TypeString
             SnowflakeDataType.BINARY -> RepresentationType.Bytes
             SnowflakeDataType.DATE -> RepresentationType.Date
             SnowflakeDataType.TIME -> RepresentationType.Timestamp
             SnowflakeDataType.TIMESTAMP_NTZ -> RepresentationType.Timestamp
-            SnowflakeDataType.TIMESTAMP_LTZ, 
+            SnowflakeDataType.TIMESTAMP_LTZ,
             SnowflakeDataType.TIMESTAMP_TZ -> RepresentationType.Timestamptz
             SnowflakeDataType.VARIANT,
             SnowflakeDataType.OBJECT,
@@ -44,7 +46,7 @@ class SnowflakeSchemaGenerator : DefaultSchemaGenerator<SnowflakeDataType>() {
             SnowflakeDataType.BOOLEAN -> RepresentationType.TypeBoolean
             else -> null
         }
-        
+
         return createScalarType(representationType, columnType)
     }
 
@@ -59,7 +61,7 @@ class SnowflakeSchemaGenerator : DefaultSchemaGenerator<SnowflakeDataType>() {
             SnowflakeDataType.DATE -> SQLDataType.DATE
             SnowflakeDataType.TIME -> SQLDataType.TIME
             SnowflakeDataType.TIMESTAMP_NTZ -> SQLDataType.TIMESTAMP
-            SnowflakeDataType.TIMESTAMP_LTZ, 
+            SnowflakeDataType.TIMESTAMP_LTZ,
             SnowflakeDataType.TIMESTAMP_TZ -> SQLDataType.TIMESTAMPWITHTIMEZONE
             SnowflakeDataType.VARIANT,
             SnowflakeDataType.OBJECT,
@@ -68,6 +70,28 @@ class SnowflakeSchemaGenerator : DefaultSchemaGenerator<SnowflakeDataType>() {
             SnowflakeDataType.GEOMETRY -> SQLDataType.JSON
             SnowflakeDataType.BOOLEAN -> SQLDataType.BOOLEAN
             else -> SQLDataType.CLOB
+        }
+    }
+
+    override fun generateScalarName(columnType: SnowflakeDataType): String {
+        return when (columnType) {
+            is SnowflakeDataType.NUMBER -> {
+                val (precision, scale) = columnType
+                when {
+                    scale == 0 ->
+                    when {
+                        precision <= 2 -> "Int8"
+                        precision <= 4 -> "Int16"
+                        precision <= 9 -> "Int32"
+                        precision <= 18 -> "Int64"
+                        else -> "Biginteger"
+                    }
+                    scale > 0 -> "Bigdecimal"
+                    else -> "Bigdecimal"
+                }
+            }
+            else -> columnType.typeName
+
         }
     }
 
@@ -81,14 +105,14 @@ class SnowflakeSchemaGenerator : DefaultSchemaGenerator<SnowflakeDataType>() {
                 when {
                     scale == 0 && precision > 18 ->
                         cast(field, SQLDataType.VARCHAR)
-                    scale > 0 -> 
+                    scale > 0 ->
                         cast(field, SQLDataType.VARCHAR)
                     else -> field
                 }
             }
-            SnowflakeDataType.GEOGRAPHY, SnowflakeDataType.GEOMETRY -> 
+            SnowflakeDataType.GEOGRAPHY, SnowflakeDataType.GEOMETRY ->
                 cast(field("ST_AsGeoJSON({0})", Any::class.java, field), SQLDataType.JSON)
-            SnowflakeDataType.VECTOR -> 
+            SnowflakeDataType.VECTOR ->
                 cast(field("TO_ARRAY({0})", Any::class.java, field), SQLDataType.JSON)
             else -> field
         }
@@ -104,7 +128,7 @@ class SnowflakeSchemaGenerator : DefaultSchemaGenerator<SnowflakeDataType>() {
         return when (columnType) {
             is SnowflakeDataType.NUMBER,
             SnowflakeDataType.FLOAT -> numericFunctions
-            
+
             SnowflakeDataType.BOOLEAN,
             SnowflakeDataType.DATE,
             SnowflakeDataType.TEXT,
@@ -112,7 +136,7 @@ class SnowflakeSchemaGenerator : DefaultSchemaGenerator<SnowflakeDataType>() {
             SnowflakeDataType.TIMESTAMP_NTZ,
             SnowflakeDataType.TIMESTAMP_LTZ,
             SnowflakeDataType.TIMESTAMP_TZ -> listOf("min", "max")
-            
+
             else -> emptyList()
         }
     }
@@ -138,16 +162,16 @@ class SnowflakeSchemaGenerator : DefaultSchemaGenerator<SnowflakeDataType>() {
 
         return when (columnType) {
             SnowflakeDataType.TEXT -> baseOperators + comparisonOperators + textOperators
-            
+
             is SnowflakeDataType.NUMBER,
             SnowflakeDataType.FLOAT -> baseOperators + comparisonOperators
-            
+
             SnowflakeDataType.DATE,
             SnowflakeDataType.TIME,
             SnowflakeDataType.TIMESTAMP_NTZ,
             SnowflakeDataType.TIMESTAMP_LTZ,
             SnowflakeDataType.TIMESTAMP_TZ -> baseOperators + comparisonOperators
-            
+
             SnowflakeDataType.BOOLEAN,
             SnowflakeDataType.ARRAY,
             SnowflakeDataType.OBJECT,
