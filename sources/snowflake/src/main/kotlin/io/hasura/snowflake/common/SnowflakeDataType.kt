@@ -83,14 +83,14 @@ sealed class SnowflakeDataType : ColumnType {
                 when {
                     scale == 0 ->
                         when {
-                            precision <= 2 -> "Int8"
-                            precision <= 4 -> "Int16"
-                            precision <= 9 -> "Int32"
-                            precision <= 18 -> "Int64"
-                            else -> "Biginteger"
+                            precision <= 2 -> "INT_8"
+                            precision <= 4 -> "INT_16"
+                            precision <= 9 -> "INT_32"
+                            precision <= 18 -> "INT_64"
+                            else -> "BIGINTEGER"
                         }
-                    scale > 0 -> "Bigdecimal"
-                    else -> "Bigdecimal"
+                    scale > 0 -> "BIG_DECIMAL"
+                    else -> "BIGDECIMAL"
                 }
             }
             else -> this::class.simpleName?.uppercase() ?: "UNKNOWN"
