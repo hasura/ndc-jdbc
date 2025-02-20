@@ -18,7 +18,7 @@ run-snowflake:
 	HASURA_CONFIGURATION_DIRECTORY=../../../configs/snowflake \
 	./gradlew :sources:snowflake:app:run
 
-run-snowflake-cli:
+run-snowflake-introspection:
 ifndef JDBC_URL
 	$(error JDBC_URL environment variable is not set)
 endif
