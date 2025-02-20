@@ -13,7 +13,7 @@ jobs:
         connector: [snowflake]
         include:
           - connector: snowflake
-            jdbc_url: ${{ secrets.SNOWFLAKE_JDBC_URL }}
+            jdbc_url_env: SNOWFLAKE_JDBC_URL
             config_command: make run-snowflake-cli
             run_command: make run-snowflake
             test_dir: ndc-tests/snowflake
@@ -44,7 +44,7 @@ jobs:
 
       - name: Generate configuration
         env:
-          JDBC_URL: ${{ matrix.jdbc_url }}
+          JDBC_URL: ${{ secrets[matrix.jdbc_url_env] }}
         run: |
           ${{ matrix.config_command }} > config-generation.log 2>&1 || {
             echo "Configuration generation failed for ${{ matrix.connector }}. Last 50 lines of log:"
