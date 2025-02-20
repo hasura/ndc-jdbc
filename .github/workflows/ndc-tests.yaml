@@ -54,7 +54,7 @@ jobs:
 
       - name: Run the connector
         env:
-          JDBC_URL: ${{ matrix.jdbc_url }}
+          JDBC_URL: ${{ secrets[matrix.jdbc_url_env] }}
         run: |
           ${{ matrix.run_command }} > connector.log 2>&1 &
           echo "SERVER_PID=$!" >> $GITHUB_ENV
