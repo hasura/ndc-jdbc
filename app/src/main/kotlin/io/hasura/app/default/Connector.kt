@@ -79,7 +79,7 @@ class DefaultConnector<T : ColumnType>(
 
     fun cleanUpRows(request: QueryRequest, rows: List<Map<String, JsonElement>>?): List<Map<String, JsonElement>>? {
         return rows?.map { row ->
-            row.entries.mapNotNull { (key, value) -> 
+            row.entries.mapNotNull { (key, value) ->
                 request.query.fields?.keys?.find { it.equals(key, ignoreCase = true) }?.let { matchedKey ->
                     matchedKey to value
                 }
@@ -119,7 +119,8 @@ class DefaultConnector<T : ColumnType>(
                         val aggregatesAsync = async {
                             request.query.aggregates?.let {
                                 queryExecutor.executeQuery(query.generateAggregateQuery())
-                                    .firstOrNull()?.let { JsonObject(it) }
+//                                    .firstOrNull()?.let { JsonObject(it) }
+                                    .map{ JsonObject(it) }
                             }
                         }
 
@@ -137,19 +138,18 @@ class DefaultConnector<T : ColumnType>(
                             variables == null ->
                                 QueryResponse(rowSets = listOf(RowSet(
                                     rows = cleanUpRows(request, rows),
-                                    aggregates = aggregates?.let { agg -> 
-                                        agg.filterKeys { key -> 
-                                            request.query.aggregates?.containsKey(key) == true 
-                                        }
-                                    }?.let { JsonObject(it) }
+                                    aggregates = aggregates?.firstOrNull()
                                 )))
                             else ->
                                 QueryResponse(rowSets = variables.indices.map { index ->
-                                    RowSet(rows = rows?.filter { row -> 
-                                        row[indexName]?.toString()?.toIntOrNull() == index 
+                                    RowSet(
+                                        rows = rows?.filter { row ->
+                                        row[indexName]?.toString()?.toIntOrNull() == index
                                     }?.let { filteredRows ->
                                         cleanUpRows(request, filteredRows)
-                                    })
+                                    },
+                                        aggregates = aggregates?.getOrNull(index)
+                                    )
                                 })
                         }
                     }

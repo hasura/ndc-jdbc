@@ -15,7 +15,6 @@ import org.jooq.conf.Settings
 import org.jooq.Field as JooqField
 import org.jooq.Query as JooqQuery
 import org.jooq.SQLDialect
-import org.jooq.impl.DSL
 import org.jooq.impl.DSL.*
 import org.jooq.impl.SQLDataType
 
@@ -33,19 +32,19 @@ class DefaultQuery<T : ColumnType>(
     private val source: DatabaseSource,
     private val request: QueryRequest,
 ) : DatabaseQuery<DefaultConfiguration<T>> {
-    override fun generateQuery(): String = generateBaseQuery().toString()
+    override fun generateQuery(): String = generateBaseQuery()
 
     override fun generateExplainQuery(): String = "EXPLAIN ${generateBaseQuery()}"
 
-    private fun generateBaseQuery(): JooqQuery {
+    private fun generateBaseQuery(): String {
         val (dialect, settings) = getDatabaseDialect(source)
         val ctx = using(dialect, settings)
         val sql = when {
             request.variables?.isNotEmpty() == true -> generateVariableQuery(ctx)
             else -> generateSingleQuery(ctx)
-        }
+        }.toString()
 
-        ConnectorLogger.logger.debug("Generated sql: ${sql}")
+        ConnectorLogger.logger.debug("Generated sql: $sql")
 
         return sql
     }
@@ -79,19 +78,33 @@ class DefaultQuery<T : ColumnType>(
     override fun generateAggregateQuery(): String {
         val (dialect, settings) = getDatabaseDialect(source)
         val ctx = using(dialect, settings)
-        val aggregateFields = request.query.aggregates!!.map { (alias, aggregate) ->
-            FieldWithAlias(
-                columnType = columnTypeTojOOQType(request.collection, FieldOrAggregate.AggregateType(aggregate)),
-                field = translateIRAggregateField(aggregate),
-                alias = alias
-            )
-        }
-        val sql = ctx
-            .select(
-                aggregateFields
-                    .withCasts(request.collection)
-                    .withAliases()
-            )
+        val sql = when {
+            request.variables?.isNotEmpty() == true -> generateVariableAggregateQuery(ctx)
+            else -> generateSingleAggregateQuery(ctx)
+        }.toString()
+
+
+        ConnectorLogger.logger.debug("Generated aggregate sql: $sql")
+        return sql
+    }
+
+    private fun generateVariableAggregateQuery(ctx: DSLContext): JooqQuery {
+        val aggregateFields = getAggFields()
+        val idxField = field(name(indexName))
+        val varsCTE = buildVariablesCTE()
+
+        return ctx.with(varsCTE)
+            .select(aggregateFields)
+                    .from(buildAggCTE(varsCTE))
+                    .groupBy(idxField)
+            .orderBy(idxField)
+    }
+
+    private fun generateSingleAggregateQuery(ctx: DSLContext): JooqQuery {
+        val aggregateFields = getAggFields()
+
+        return ctx
+            .select(aggregateFields)
             .from(
                 ctx
                     .select(asterisk())
@@ -101,11 +114,24 @@ class DefaultQuery<T : ColumnType>(
                     .limit(request.query.limit?.toInt())
                     .offset(request.query.offset?.toInt())
             )
-            .toString()
+    }
 
-        ConnectorLogger.logger.debug("Generated aggregate sql: ${sql}")
+    private fun getAggFields() = request.query.aggregates!!.map { (alias, aggregate) ->
+        FieldWithAlias(
+            columnType = columnTypeTojOOQType(request.collection, FieldOrAggregate.AggregateType(aggregate)),
+            field = translateIRAggregateField(aggregate),
+            alias = alias
+        )
+    }
+        .withCasts(request.collection)
+        .withAliases()
 
-        return sql
+    private fun buildAggCTE(varsCTE: CommonTableExpression<Record>): SelectJoinStep<Record> {
+        return select(asterisk())
+                    .from(name(request.collection.split(".")))
+                    .join(varsCTE)
+                    .on(getVariablePredicate(table(name(request.collection.split(".")))))
+
     }
 
     private fun getDatabaseDialect(type: DatabaseSource): Pair<SQLDialect, Settings> = when (type) {
@@ -141,7 +167,7 @@ class DefaultQuery<T : ColumnType>(
     private fun handleBinaryComparison(expr: Expression.BinaryComparisonOperator, table: Table<*>? = null): Condition {
         val fieldName = getColumnName(expr.column)
         val field = if (table != null) field(name(table.name, fieldName)) else field(name(fieldName))
-        
+
         return when (val value = expr.value) {
             is ComparisonValue.Scalar -> handleScalarComparison(field, expr.operator, value)
             is ComparisonValue.Column -> handleColumnComparison(field, expr.operator, value)
@@ -233,7 +259,7 @@ class DefaultQuery<T : ColumnType>(
                     condition("REGEXP_LIKE({0}, {1})", field, compareWith)
                 }
             }
-            
+
             DatabaseSource.BIGQUERY -> {
                 if (isCaseInsensitive) {
                     condition("REGEXP_CONTAINS(LOWER({0}), LOWER({1}))", field, compareWith)
@@ -241,7 +267,7 @@ class DefaultQuery<T : ColumnType>(
                     condition("REGEXP_CONTAINS({0}, {1})", field, compareWith)
                 }
             }
-            
+
             DatabaseSource.REDSHIFT -> {
                 if (isCaseInsensitive) {
                     condition("REGEXP_LIKE(LOWER({0}), LOWER({1}))", field, compareWith)
@@ -249,7 +275,7 @@ class DefaultQuery<T : ColumnType>(
                     condition("REGEXP_LIKE({0}, {1})", field, compareWith)
                 }
             }
-            
+
             DatabaseSource.DATABRICKS -> {
                 if (isCaseInsensitive) {
                     condition("REGEXP_LIKE(LOWER({0}), LOWER({1}))", field, compareWith)
@@ -257,7 +283,7 @@ class DefaultQuery<T : ColumnType>(
                     condition("REGEXP_LIKE({0}, {1})", field, compareWith)
                 }
             }
-            
+
             else -> throw ConnectorError.NotSupported("Regex operations not supported for this database")
         }
         return if (isNegated) not(expr) else expr
@@ -277,7 +303,7 @@ class DefaultQuery<T : ColumnType>(
                     field.like(compareWith.cast(SQLDataType.VARCHAR))
                 }
             }
-            
+
             DatabaseSource.BIGQUERY -> {
                 if (isCaseInsensitive) {
                     condition("LOWER({0}) LIKE LOWER({1})", field, compareWith)
@@ -285,7 +311,7 @@ class DefaultQuery<T : ColumnType>(
                     condition("{0} LIKE {1}", field, compareWith)
                 }
             }
-            
+
             DatabaseSource.REDSHIFT -> {
                 if (isCaseInsensitive) {
                     field.likeIgnoreCase(compareWith.cast(SQLDataType.VARCHAR))
@@ -293,7 +319,7 @@ class DefaultQuery<T : ColumnType>(
                     field.like(compareWith.cast(SQLDataType.VARCHAR))
                 }
             }
-            
+
             DatabaseSource.DATABRICKS -> {
                 if (isCaseInsensitive) {
                     condition("LOWER({0}) LIKE LOWER({1})", field, compareWith)
@@ -301,7 +327,7 @@ class DefaultQuery<T : ColumnType>(
                     condition("{0} LIKE {1}", field, compareWith)
                 }
             }
-            
+
             else -> throw ConnectorError.NotSupported("Ilike operations not supported for this database")
         }
         return if (isNegated) not(expr) else expr
@@ -361,10 +387,9 @@ class DefaultQuery<T : ColumnType>(
     private fun buildResultsCTEQuery(
         varsCTE: CommonTableExpression<Record>
     ): SelectJoinStep<Record> {
-        val fields = getFieldSelects().map { field(name(resultTableName, it.field.name)) }.toTypedArray()
         val partitionFields = buildPartitionFields()
         val resultTable = table(name(request.collection.split("."))).`as`(resultTableName)
-        
+
         return select(
                 field("{0}.*", Any::class.java, name(resultTable.name)), // Why doesn't resultTable.asterisk() work here?
                 *partitionFields
@@ -387,20 +412,6 @@ class DefaultQuery<T : ColumnType>(
         request.query.predicate?.let { generateCondition(it, table) }
             ?: throw ConnectorError.NotSupported("Predicate is required for variable queries")
 
-    private fun getVariableJoinColumn(): String =
-        request.query.predicate?.let { predicate ->
-            when (predicate) {
-                is Expression.BinaryComparisonOperator -> {
-                    val value = predicate.value
-                    if (value is ComparisonValue.Variable) {
-                        value.name
-                    } else {
-                        throw ConnectorError.NotSupported("Predicate must use a variable comparison")
-                    }
-                }
-                else -> throw ConnectorError.NotSupported("Predicate must be a binary comparison")
-            }
-        } ?: throw ConnectorError.NotSupported("No predicate comparison found")
 
     private fun getColumnName(target: ComparisonTarget): String = when (target) {
         is ComparisonTarget.Column -> {
@@ -478,7 +489,7 @@ class DefaultQuery<T : ColumnType>(
         else -> primitive.content
     }
 
-    private fun convertJsonArray(array: JsonArray): List<Any> = 
+    private fun convertJsonArray(array: JsonArray): List<Any> =
         array.map { element ->
             when (element) {
                 is JsonPrimitive -> convertJsonPrimitive(element)
@@ -486,7 +497,7 @@ class DefaultQuery<T : ColumnType>(
             }
         }
 
-    private fun convertJsonValue(value: ComparisonValue.Scalar): Any = 
+    private fun convertJsonValue(value: ComparisonValue.Scalar): Any =
         when (val jsonElement = value.value) {
             is JsonPrimitive -> convertJsonPrimitive(jsonElement)
             is JsonArray -> convertJsonArray(jsonElement)
@@ -519,7 +530,7 @@ class DefaultQuery<T : ColumnType>(
                 else -> throw ConnectorError.NotSupported("Unsupported: Relationships are not supported")
             }
         } ?: emptyList()
-    
+
     private fun List<FieldWithAlias<T>>.withCasts(collection: String): List<FieldWithAlias<T>> =
         map { fieldWithAlias ->
             fieldWithAlias.copy(
