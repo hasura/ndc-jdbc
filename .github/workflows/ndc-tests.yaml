@@ -53,6 +53,7 @@ jobs:
           JOOQ_PRO_EMAIL: ${{ secrets.JOOQ_PRO_EMAIL }}
           JOOQ_PRO_LICENSE: ${{ secrets.JOOQ_PRO_LICENSE }}
         run: |
+          mkdir -p configs/${{ matrix.connector }}
           ${{ matrix.config_command }} > config-generation.log 2>&1 || {
             echo "Configuration generation failed for ${{ matrix.connector }}. Last 50 lines of log:"
             tail -n 50 config-generation.log
