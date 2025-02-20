@@ -78,26 +78,14 @@ jobs:
 
       - name: Run Tests
         id: run_tests
-        continue-on-error: true
         run: |
+          set -o pipefail  # This ensures pipe failures are propagated
           ndc-test replay --endpoint http://localhost:${{ matrix.port }} --snapshots-dir ${{ matrix.test_dir }} 2>&1 | tee test-output.log
-
-      - name: Post test results to PR
-        if: steps.run_tests.outcome == 'failure'
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const fs = require('fs');
-            const testOutput = fs.readFileSync('test-output.log', 'utf8');
-            const body = `❌ NDC Test Cases Failed for ${{ matrix.connector }}:\n\n\`\`\`\n${testOutput}\n\`\`\``;
-
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body
-            });
+          exit_code=$?
+          if [ $exit_code -eq 1 ]; then
+            echo "Tests failed with exit code $exit_code"
+            exit 1
+          fi
 
       - name: Stop Connector
         if: always()
