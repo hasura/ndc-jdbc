@@ -68,7 +68,15 @@ jobs:
       - name: Print schema
         id: print_schema
         run: |
-          curl http://localhost:8081/schema | jq .scalar_types.NUMBER
+          echo "Checking schema endpoint..."
+          code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8081/schema)
+          if [ "$code" != "200" ]; then
+            echo "Error: Server returned HTTP $code"
+            exit 1
+          fi
+
+          echo "Parsing NUMBER scalar type..."
+          curl -s http://localhost:8081/schema | jq .scalar_types.NUMBER
 
       - name: Run Tests
         id: run_tests
