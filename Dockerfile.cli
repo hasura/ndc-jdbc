@@ -19,16 +19,34 @@ COPY . .
 # Build the fat JAR
 RUN ./gradlew clean :sources:${SOURCE}:cli:shadowJar
 
-# 🎯 Runtime stage: Uses Distroless for minimal final image
-FROM gcr.io/distroless/java21:nonroot
+# 🎯 Runtime stage: Uses Alpine for minimal final image
+FROM eclipse-temurin:21-jre-alpine
 
 # Define an argument for the source and project module
 ARG SOURCE
 
 WORKDIR /
 
+# Set default empty JAVA_OPTS
+ENV JAVA_OPTS=""
+
+# Copy the app.properties file from the source directory
+COPY sources/${SOURCE}/app/app.properties* /
+
 # Copy only the built fat JAR from the builder stage
 COPY --from=builder sources/${SOURCE}/cli/build/libs/cli-all.jar /app.jar
 
-# Set entrypoint to run the application
-ENTRYPOINT ["java", "-jar", "/app.jar"]
+# Create an entrypoint script
+COPY <<-"EOF" /entrypoint.sh
+#!/bin/sh
+if [ -f "/app.properties" ]; then
+    DEFAULT_OPTS=$(grep "jvm.opts" "/app.properties" | cut -d'=' -f2-)
+else
+    DEFAULT_OPTS=""
+fi
+exec java $DEFAULT_OPTS $JAVA_OPTS -jar /app.jar "$@"
+EOF
+
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

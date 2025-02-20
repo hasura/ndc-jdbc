@@ -1,8 +1,8 @@
-package io.hasura.snowflake.app
+package io.hasura.databricks.app
 
 import io.hasura.ndc.connector.startServer
 
 fun main(args: Array<String>) {
-    val connector = SnowflakeConnector.createConnector()
+    val connector = DatabricksConnector.createConnector()
     startServer(connector, args)
 }
