@@ -30,7 +30,7 @@ data class SnowflakeConfiguration(
 
 object SnowflakeConfigGenerator : IConfigGenerator<SnowflakeConfiguration, SnowflakeDataType> {
     val jsonFormatter = Json { prettyPrint = true }
-    
+
     override fun generateConfig(config: SnowflakeConfiguration): DefaultConfiguration<SnowflakeDataType> {
         val introspectionResult = introspectSchemas(config)
 
@@ -93,14 +93,14 @@ object SnowflakeConfigGenerator : IConfigGenerator<SnowflakeConfiguration, Snowf
                 array_agg(object_construct(
                     'name', columns.column_name,
                     'description', columns.comment,
-                    'type', case 
-                        when columns.data_type = 'NUMBER' then 
+                    'type', case
+                        when columns.data_type = 'NUMBER' then
                             object_construct(
                                 'scalar_type', 'NUMBER',
                                 'precision', columns.numeric_precision,
                                 'scale', columns.numeric_scale
                             )
-                        else 
+                        else
                             object_construct('scalar_type', columns.data_type)
                     end,
                     'nullable', to_boolean(columns.is_nullable),
@@ -227,7 +227,7 @@ class UpdateCommand : Subcommand("update", "Update configuration file") {
 fun main(args: Array<String>) {
     val parser = ArgParser("update", strictSubcommandOptionsOrder = true)
     parser.subcommands(UpdateCommand())
-    
+
     val modifiedArgs = args.toMutableList()
     val schemasIndex = modifiedArgs.indexOf("--schemas")
     if (schemasIndex != -1 && schemasIndex + 1 < modifiedArgs.size) {
