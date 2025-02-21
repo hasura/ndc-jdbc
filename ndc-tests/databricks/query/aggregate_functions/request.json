@@ -2,7 +2,7 @@
   "collection": "chinook.default.invoices",
   "query": {
     "aggregates": {
-      "how_many_chinook.default.invoices": {
+      "how_many_invoices": {
         "type": "star_count"
       },
       "how_many_non_null_billing_state_rows": {

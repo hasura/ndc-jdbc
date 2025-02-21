@@ -1,7 +1,7 @@
 [
   {
     "aggregates": {
-      "how_many_chinook.default.albums": 10,
+      "how_many_albums": 10,
       "how_many_artist_ids": 10,
       "how_many_distinct_artist_ids": 8,
       "min_artist_id": "8",

@@ -23,7 +23,7 @@
     "limit": 10,
     "offset": 10,
     "aggregates": {
-      "how_many_chinook.default.albums": {
+      "how_many_albums": {
         "type": "star_count"
       },
       "how_many_artist_ids": {

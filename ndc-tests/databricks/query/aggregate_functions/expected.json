@@ -1,7 +1,7 @@
 [
   {
     "aggregates": {
-      "how_many_chinook.default.invoices": 412,
+      "how_many_invoices": 412,
       "how_many_non_null_billing_state_rows": 210,
       "how_many_distinct_billing_countries": 24,
       "min_invoice_id": "1",
