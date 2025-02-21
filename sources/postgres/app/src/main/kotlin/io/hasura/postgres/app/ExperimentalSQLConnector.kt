@@ -35,6 +35,10 @@ class ExperimentalSQLConnector<T : ColumnType>(
             val dslContext = DSL.using(connection)
 
             val stmt = DSL.using(SQLDialect.DEFAULT).parser().parseResultQuery(sqlRequest.sql)
+
+            dslContext.renderInlined(stmt)
+            println("Postgres SQL: $stmt")
+
             val result = dslContext.fetch(stmt).intoMaps()
 
             QueryResponse(
