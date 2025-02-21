@@ -42,7 +42,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile.app
-          platforms: linux/amd64 # Add linux/arm64 later
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/hasura/ndc-snowflake-jdbc:v${{ steps.version.outputs.version }}
           build-args: |
@@ -55,7 +55,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile.cli
-          platforms: linux/amd64 # Add linux/arm64 later
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/hasura/ndc-snowflake-cli:v${{ steps.version.outputs.version }}
           build-args: |
