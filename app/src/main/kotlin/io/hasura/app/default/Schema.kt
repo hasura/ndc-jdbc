@@ -58,7 +58,9 @@ abstract class DefaultSchemaGeneratorClass<T : ColumnType> : ISchemaGenerator<De
                     )
                 },
                 type = table.name,
-                uniquenessConstraints = emptyMap()
+                uniquenessConstraints = table.primaryKeys.associate {
+                    it to UniquenessConstraint(uniqueColumns = listOf(it))
+                }
             )
         }
     }

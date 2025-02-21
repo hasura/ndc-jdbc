@@ -2,6 +2,7 @@ package io.hasura.snowflake.app
 
 import io.hasura.app.default.*
 import io.hasura.ndc.ir.*
+import io.hasura.ndc.ir.Type
 import io.hasura.snowflake.common.SnowflakeDataType
 import org.jooq.DataType
 import org.jooq.impl.DSL.*
@@ -54,7 +55,7 @@ class SnowflakeSchemaGenerator : DefaultSchemaGenerator<SnowflakeDataType>() {
         columnType: SnowflakeDataType,
     ): DataType<out Any> {
         return when (columnType) {
-            SnowflakeDataType.NUMBER -> SQLDataType.NUMERIC
+            is SnowflakeDataType.NUMBER -> SQLDataType.NUMERIC
             SnowflakeDataType.FLOAT -> SQLDataType.DOUBLE
             SnowflakeDataType.TEXT -> SQLDataType.CLOB
             SnowflakeDataType.BINARY -> SQLDataType.BLOB
@@ -145,7 +146,7 @@ class SnowflakeSchemaGenerator : DefaultSchemaGenerator<SnowflakeDataType>() {
         columnType: SnowflakeDataType,
         representation: TypeRepresentation?
     ): Map<String, AggregateFunctionDefinition> {
-        return getSupportedAggregateFunctions(columnType).associateWith { func ->
+        return getSupportedAggregateFunctions(columnType).associateWith { _ ->
             AggregateFunctionDefinition(
                 resultType = Type.Named(name = columnType.typeName)
             )

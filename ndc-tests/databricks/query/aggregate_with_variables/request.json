@@ -1,0 +1,54 @@
+{
+  "collection": "albums",
+  "query": {
+    "aggregates": {
+      "albumId_sum": {
+        "type": "single_column",
+        "column": "AlbumId",
+        "function": "sum"
+      },
+      "albumId_avg": {
+        "type": "single_column",
+        "column": "AlbumId",
+        "function": "avg"
+      },
+      "albumId_max": {
+        "type": "single_column",
+        "column": "AlbumId",
+        "function": "max"
+      },
+      "albumId_min": {
+        "type": "single_column",
+        "column": "AlbumId",
+        "function": "min"
+      }
+    },
+    "predicate": {
+      "type": "binary_comparison_operator",
+      "column": {
+        "type": "column",
+        "name": "ArtistId",
+        "path": []
+      },
+      "operator": "_eq",
+      "value": {
+        "type": "variable",
+        "name": "$ArtistId"
+      }
+    }
+  },
+  "arguments": {},
+  "collection_relationships": {},
+  "variables": [
+    {"$ArtistId": "7"},
+    {"$ArtistId": "9"},
+    {"$ArtistId": "5"},
+    {"$ArtistId": "2"},
+    {"$ArtistId": "10"},
+    {"$ArtistId": "1"},
+    {"$ArtistId": "4"},
+    {"$ArtistId": "6"},
+    {"$ArtistId": "8"},
+    {"$ArtistId": "3"}
+  ]
+}

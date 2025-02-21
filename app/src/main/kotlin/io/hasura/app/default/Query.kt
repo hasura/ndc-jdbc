@@ -235,7 +235,7 @@ class DefaultQuery<T : ColumnType>(
     ): Condition {
         return when (request.variables?.isNotEmpty() == true) {
             true -> {
-                val varField = field(name(variablesCTEName, value.name))
+                val varField = field(name(variablesCTEName, cleanVariableName(value.name)))
                 when (operator) {
                     "_like", "_ilike" -> handleBasicComparison(field, operator, varField)
                     else -> handleBasicComparison(field, operator, varField)
@@ -371,8 +371,8 @@ class DefaultQuery<T : ColumnType>(
     private fun createVariableFields(variableMap: Map<String, JsonElement>): Array<JooqField<*>> {
         return variableMap.map { (index, value) ->
             when (value) {
-                JsonNull -> inline(null as String?).`as`(index)
-                else -> inline(convertJsonValue(ComparisonValue.Scalar(value))).`as`(index)
+                JsonNull -> inline(null as String?).`as`(cleanVariableName(index))
+                else -> inline(convertJsonValue(ComparisonValue.Scalar(value))).`as`(cleanVariableName(index))
             }
         }.toTypedArray()
     }
@@ -608,5 +608,9 @@ class DefaultQuery<T : ColumnType>(
                 }
             }
         }
+    }
+
+    private fun cleanVariableName(name: String): String {
+        return name.replace("[^a-zA-Z0-9_]".toRegex(), "_")
     }
 }
