@@ -57,7 +57,7 @@ jobs:
           file: ./Dockerfile.cli
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/hasura/ndc-snowflake-cli:v${{ steps.version.outputs.version }}
+          tags: ghcr.io/hasura/ndc-snowflake-jdbc-cli:v${{ steps.version.outputs.version }}
           build-args: |
             SOURCE=snowflake
             JOOQ_PRO_EMAIL=${{ secrets.JOOQ_PRO_EMAIL }}
