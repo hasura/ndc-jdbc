@@ -80,13 +80,14 @@ object DatabricksConfigGenerator : IConfigGenerator<DatabricksConfiguration, Dat
 
     private fun introspectSchemas(config: DatabricksConfiguration): IntrospectionResult {
         val jdbcUrl = config.connectionUri.resolve()
+        val catalog = extractCatalog(jdbcUrl)
 
         // Schemacrawler options
         val options = SchemaCrawlerOptionsBuilder.newSchemaCrawlerOptions()
             .withLimitOptions(
                 LimitOptionsBuilder.builder()
                     .tableTypes(null as String?)
-                    .includeSchemas(includeSchemas(extractCatalog(jdbcUrl), config.schemas))
+                    .includeSchemas(includeSchemas(catalog, config.schemas))
                     .toOptions()
             )
         val results = SchemaCrawlerUtility.getCatalog(
@@ -99,7 +100,7 @@ object DatabricksConfigGenerator : IConfigGenerator<DatabricksConfiguration, Dat
         try {
             val tables = results.tables.map { table ->
                 TableInfo<DatabricksDataType>(
-                    name = table.name,
+                    name = "${catalog}.${table.schema.name}.${table.name}",
                     category = when (table.tableType.tableType) {
                         "TABLE" -> Category.TABLE
                         "VIEW" -> Category.VIEW
