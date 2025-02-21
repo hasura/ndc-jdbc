@@ -1,6 +1,6 @@
-POST http://localhost:8087/sql
+POST http://localhost:8081/sql
 Content-Type: application/json
 
 {
-  "sql": "SELECT \"AlbumId\", \"Title\" FROM \"Album\" WHERE \"AlbumId\" = 1"
+  "sql": "SELECT ALBUMID, TITLE FROM CHINOOK.PUBLIC.ALBUM WHERE ALBUMID = 1"
 }
