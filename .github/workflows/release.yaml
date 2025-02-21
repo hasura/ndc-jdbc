@@ -1,0 +1,62 @@
+name: Release Connector
+
+on:
+  push:
+    tags:
+      - 'snowflake/v*'
+      - 'bigquery/v*'
+      - 'redshift/v*'
+      - 'databricks/v*'
+      - 'mysql/v*'
+      - 'oracle/v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Extract connector and version
+        id: version
+        run: |
+          TAG=${{ github.ref_name }}
+          CONNECTOR=$(echo $TAG | cut -d'/' -f1)
+          VERSION=$(echo $TAG | cut -d'/' -f2 | sed 's/v//')
+          echo "connector=$CONNECTOR" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build Docker images
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          JOOQ_PRO_EMAIL: ${{ secrets.JOOQ_PRO_EMAIL }}
+          JOOQ_PRO_LICENSE: ${{ secrets.JOOQ_PRO_LICENSE }}
+        run: |
+          make docker-${{ steps.version.outputs.connector }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish Docker images
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          JOOQ_PRO_EMAIL: ${{ secrets.JOOQ_PRO_EMAIL }}
+          JOOQ_PRO_LICENSE: ${{ secrets.JOOQ_PRO_LICENSE }}
+        run: |
+          make publish-${{ steps.version.outputs.connector }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "${{ steps.version.outputs.connector }} v${{ steps.version.outputs.version }}"
+          generate_release_notes: true
