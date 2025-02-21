@@ -14,6 +14,9 @@ dependencies {
 
     // Jooq
     implementation("org.jooq.pro:jooq:3.19.8")
+
+    // Postgres JDBC driver
+    implementation("org.postgresql:postgresql:42.7.5")
 }
 
 tasks.shadowJar {

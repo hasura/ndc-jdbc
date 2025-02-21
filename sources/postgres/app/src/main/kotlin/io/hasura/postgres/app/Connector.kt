@@ -4,13 +4,8 @@ import io.hasura.app.base.*
 import io.hasura.app.default.*
 import io.hasura.common.*
 import io.hasura.ndc.connector.*
-import kotlinx.serialization.Serializable
+import io.hasura.postgres.PGColumnType
 import kotlinx.serialization.builtins.serializer
-
-@Serializable
-data class PGColumnType(
-    override val typeName: String
-) : ColumnType
 
 object PostgresConnector : ConnectorBuilder<DefaultConfiguration<PGColumnType>, DefaultState<PGColumnType>> {
     override fun createConnector() = ExperimentalSQLConnector<PGColumnType>(
