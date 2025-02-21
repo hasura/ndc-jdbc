@@ -34,7 +34,13 @@ class ExperimentalSQLConnector<T : ColumnType>(
         return state.client.getConnection().use { connection ->
             val dslContext = DSL.using(connection)
 
-            val stmt = DSL.using(SQLDialect.DEFAULT).parser().parseResultQuery(sqlRequest.sql)
+            val stmt = DSL.using(SQLDialect.DEFAULT)
+                .parser()
+                .parseResultQuery(sqlRequest.sql)
+
+            val snowflakeStmt = dslContext.renderInlined(stmt)
+            println("Snowflake SQL: $snowflakeStmt")
+
             val result = dslContext.fetch(stmt).intoMaps()
 
             QueryResponse(
