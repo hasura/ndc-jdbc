@@ -88,6 +88,30 @@ jobs:
           # Create tarball
           tar -czf ${{ steps.version.outputs.connector }}-connector-v${{ steps.version.outputs.version }}.tar.gz .hasura-connector/
 
+      - name: Generate package metadata
+        id: package-metadata
+        run: |
+          # Calculate SHA256 checksum of the tarball
+          CHECKSUM=$(sha256sum ${{ steps.version.outputs.connector }}-connector-v${{ steps.version.outputs.version }}.tar.gz | cut -d ' ' -f 1)
+
+          # Get current commit hash
+          COMMIT_HASH=$(git rev-parse HEAD)
+
+          # Create the connector-packaging.json file
+          cat > connector-packaging.json << EOF
+          {
+            "version": "v${{ steps.version.outputs.version }}",
+            "uri": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.version.outputs.connector }}-connector-v${{ steps.version.outputs.version }}.tar.gz",
+            "checksum": {
+              "type": "sha256",
+              "value": "$CHECKSUM"
+            },
+            "source": {
+              "hash": "$COMMIT_HASH"
+            }
+          }
+          EOF
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
@@ -95,3 +119,4 @@ jobs:
           generate_release_notes: true
           files: |
             ${{ steps.version.outputs.connector }}-connector-v${{ steps.version.outputs.version }}.tar.gz
+            connector-packaging.json
