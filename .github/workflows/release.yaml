@@ -1,0 +1,122 @@
+name: Release Connector
+
+on:
+  push:
+    tags:
+      - 'snowflake/v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Extract connector and version
+        id: version
+        run: |
+          TAG=${{ github.ref_name }}
+          CONNECTOR=$(echo $TAG | cut -d'/' -f1)
+          VERSION=$(echo $TAG | cut -d'/' -f2 | sed 's/v//')
+          echo "connector=$CONNECTOR" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push connector docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.app
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/hasura/ndc-${{ steps.version.outputs.connector }}-jdbc:v${{ steps.version.outputs.version }}
+          build-args: |
+            SOURCE=${{ steps.version.outputs.connector }}
+            JOOQ_PRO_EMAIL=${{ secrets.JOOQ_PRO_EMAIL }}
+            JOOQ_PRO_LICENSE=${{ secrets.JOOQ_PRO_LICENSE }}
+
+      - name: Build and push CLI docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.cli
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/hasura/ndc-${{ steps.version.outputs.connector }}-jdbc-cli:v${{ steps.version.outputs.version }}
+          build-args: |
+            SOURCE=${{ steps.version.outputs.connector }}
+            JOOQ_PRO_EMAIL=${{ secrets.JOOQ_PRO_EMAIL }}
+            JOOQ_PRO_LICENSE=${{ secrets.JOOQ_PRO_LICENSE }}
+
+      - name: Create connector metadata package
+        run: |
+          # Create directory structure
+          mkdir -p .hasura-connector
+
+          # Create metadata file with correct version
+          cat > .hasura-connector/connector-metadata.yaml << EOF
+          packagingDefinition:
+            type: PrebuiltDockerImage
+            dockerImage: "ghcr.io/hasura/ndc-${{ steps.version.outputs.connector }}-jdbc:v${{ steps.version.outputs.version }}"
+          supportedEnvironmentVariables:
+            - name: JDBC_URL
+              description: "The JDBC URL to connect to the database"
+            - name: JDBC_SCHEMAS
+              description: "A comma-separated list of schemas to include in the metadata"
+          commands:
+            update:
+              type: Dockerized
+              dockerImage: ghcr.io/hasura/ndc-${{ steps.version.outputs.connector }}-cli:v${{ steps.version.outputs.version }}
+              commandArgs: [update, --jdbc-url, JDBC_URL, --schemas, \$JDBC_SCHEMAS, --outfile, /etc/connector/configuration.json]
+          EOF
+
+          # Create tarball
+          tar -czf ${{ steps.version.outputs.connector }}-connector-v${{ steps.version.outputs.version }}.tar.gz .hasura-connector/
+
+      - name: Generate package metadata
+        id: package-metadata
+        run: |
+          # Calculate SHA256 checksum of the tarball
+          CHECKSUM=$(sha256sum ${{ steps.version.outputs.connector }}-connector-v${{ steps.version.outputs.version }}.tar.gz | cut -d ' ' -f 1)
+
+          # Get current commit hash
+          COMMIT_HASH=$(git rev-parse HEAD)
+
+          # Create the connector-packaging.json file
+          cat > connector-packaging.json << EOF
+          {
+            "version": "v${{ steps.version.outputs.version }}",
+            "uri": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.version.outputs.connector }}-connector-v${{ steps.version.outputs.version }}.tar.gz",
+            "checksum": {
+              "type": "sha256",
+              "value": "$CHECKSUM"
+            },
+            "source": {
+              "hash": "$COMMIT_HASH"
+            }
+          }
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "${{ steps.version.outputs.connector }} v${{ steps.version.outputs.version }}"
+          generate_release_notes: true
+          files: |
+            ${{ steps.version.outputs.connector }}-connector-v${{ steps.version.outputs.version }}.tar.gz
+            connector-packaging.json
