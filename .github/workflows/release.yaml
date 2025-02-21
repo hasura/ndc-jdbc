@@ -27,14 +27,6 @@ jobs:
           echo "connector=$CONNECTOR" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Build Docker images
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-          JOOQ_PRO_EMAIL: ${{ secrets.JOOQ_PRO_EMAIL }}
-          JOOQ_PRO_LICENSE: ${{ secrets.JOOQ_PRO_LICENSE }}
-        run: |
-          make docker-${{ steps.version.outputs.connector }}
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -42,13 +34,34 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish Docker images
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-          JOOQ_PRO_EMAIL: ${{ secrets.JOOQ_PRO_EMAIL }}
-          JOOQ_PRO_LICENSE: ${{ secrets.JOOQ_PRO_LICENSE }}
-        run: |
-          make publish-${{ steps.version.outputs.connector }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push connector docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.app
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/hasura/ndc-snowflake-jdbc:v${{ steps.version.outputs.version }}
+          build-args: |
+            SOURCE=snowflake
+            JOOQ_PRO_EMAIL=${{ secrets.JOOQ_PRO_EMAIL }}
+            JOOQ_PRO_LICENSE=${{ secrets.JOOQ_PRO_LICENSE }}
+
+      - name: Build and push CLI docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.cli
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/hasura/ndc-snowflake-cli:v${{ steps.version.outputs.version }}
+          build-args: |
+            SOURCE=snowflake
+            JOOQ_PRO_EMAIL=${{ secrets.JOOQ_PRO_EMAIL }}
+            JOOQ_PRO_LICENSE=${{ secrets.JOOQ_PRO_LICENSE }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
