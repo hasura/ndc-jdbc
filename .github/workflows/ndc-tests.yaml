@@ -56,7 +56,7 @@ jobs:
             echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/key.json" >> $GITHUB_ENV
 
             # Append key path to BigQuery JDBC URL
-            JDBC_URL="${{ secrets[matrix.jdbc_url_env] }}$(pwd)/key.json"
+            JDBC_URL="${{ secrets[matrix.jdbc_url_env] }}$(pwd)/key.json;"
             echo "JDBC_URL=$JDBC_URL" >> $GITHUB_ENV
           else
             # Keep JDBC_URL the same for non-BigQuery connectors
@@ -75,6 +75,10 @@ jobs:
             tail -n 50 config-generation.log
             exit 1
           }
+
+      - name: View Generated Configuration
+        run: |
+          cat configs/${{ matrix.connector }}/configuration.json
 
       - name: Run the connector
         env:
