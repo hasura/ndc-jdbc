@@ -2,6 +2,7 @@ package io.hasura.postgres.app
 
 import io.hasura.app.default.DefaultSchemaGenerator
 import io.hasura.ndc.ir.*
+import io.hasura.postgres.PGColumnType
 import org.jooq.DataType
 import org.jooq.impl.SQLDataType
 import org.jooq.Field as JooqField
