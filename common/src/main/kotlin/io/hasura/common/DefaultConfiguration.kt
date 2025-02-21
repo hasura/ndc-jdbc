@@ -1,4 +1,3 @@
-
 package io.hasura.common
 
 import kotlinx.serialization.SerialName
@@ -33,6 +32,7 @@ enum class Category {
     VIEW,
     MATERIALIZED_VIEW
 }
+
 
 interface ColumnType {
     val typeName: String

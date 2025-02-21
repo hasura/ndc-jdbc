@@ -1,9 +1,13 @@
 package io.hasura.app.default
 
-import io.hasura.app.base.*
-import io.hasura.common.*
-import io.hasura.ndc.connector.*
+import io.hasura.app.base.DatabaseQuery
+import io.hasura.app.base.DatabaseSource
+import io.hasura.common.ColumnType
+import io.hasura.common.DefaultConfiguration
+import io.hasura.ndc.connector.ConnectorError
+import io.hasura.ndc.connector.ConnectorLogger
 import io.hasura.ndc.ir.*
+import io.hasura.ndc.ir.Field
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -12,12 +16,10 @@ import org.jooq.*
 import org.jooq.conf.RenderNameCase
 import org.jooq.conf.RenderQuotedNames
 import org.jooq.conf.Settings
-import org.jooq.Field as JooqField
-import org.jooq.Query as JooqQuery
-import org.jooq.SQLDialect
-import org.jooq.impl.DSL
 import org.jooq.impl.DSL.*
 import org.jooq.impl.SQLDataType
+import org.jooq.Field as JooqField
+import org.jooq.Query as JooqQuery
 
 const val variablesCTEName = "vars"
 const val resultsCTEName = "rlts"
@@ -118,6 +120,7 @@ class DefaultQuery<T : ColumnType>(
 
         DatabaseSource.REDSHIFT -> SQLDialect.REDSHIFT to Settings()
         DatabaseSource.SNOWFLAKE -> SQLDialect.SNOWFLAKE to Settings()
+        DatabaseSource.POSTGRES -> SQLDialect.POSTGRES to Settings()
     }
 
     private fun getPredicate(): Condition = request.query.predicate?.let { generateCondition(it) } ?: noCondition()
@@ -131,17 +134,18 @@ class DefaultQuery<T : ColumnType>(
         is Expression.Exists -> throw ConnectorError.NotSupported("Exists queries not supported yet")
     }
 
-    private fun handleUnaryComparison(expr: Expression.UnaryComparisonOperator, table: Table<*>? = null): Condition = when (expr.operator) {
-        UnaryComparisonOperatorType.IS_NULL -> {
-            val fieldName = getColumnName(expr.column)
-            if (table != null) field(name(table.name, fieldName)).isNull else field(name(fieldName)).isNull
+    private fun handleUnaryComparison(expr: Expression.UnaryComparisonOperator, table: Table<*>? = null): Condition =
+        when (expr.operator) {
+            UnaryComparisonOperatorType.IS_NULL -> {
+                val fieldName = getColumnName(expr.column)
+                if (table != null) field(name(table.name, fieldName)).isNull else field(name(fieldName)).isNull
+            }
         }
-    }
 
     private fun handleBinaryComparison(expr: Expression.BinaryComparisonOperator, table: Table<*>? = null): Condition {
         val fieldName = getColumnName(expr.column)
         val field = if (table != null) field(name(table.name, fieldName)) else field(name(fieldName))
-        
+
         return when (val value = expr.value) {
             is ComparisonValue.Scalar -> handleScalarComparison(field, expr.operator, value)
             is ComparisonValue.Column -> handleColumnComparison(field, expr.operator, value)
@@ -166,12 +170,14 @@ class DefaultQuery<T : ColumnType>(
             operator.startsWith("_n"),
             operator.contains("i")
         )
+
         "_like", "_ilike", "_nlike", "_nilike" -> handleLikeComparison(
             field,
             compareWith,
             operator.startsWith("_n"),
             operator.contains("i")
         )
+
         else -> throw ConnectorError.NotSupported("Unsupported operator: $operator")
     }
 
@@ -186,6 +192,7 @@ class DefaultQuery<T : ColumnType>(
                 is List<*> -> field.`in`(convertedValue)
                 else -> throw ConnectorError.NotSupported("IN operator requires an array value")
             }
+
             else -> handleBasicComparison(field, operator, inline(convertedValue))
         }
     }
@@ -215,6 +222,7 @@ class DefaultQuery<T : ColumnType>(
                     else -> handleBasicComparison(field, operator, varField)
                 }
             }
+
             false -> field.eq(value.name)
         }
     }
@@ -233,7 +241,7 @@ class DefaultQuery<T : ColumnType>(
                     condition("REGEXP_LIKE({0}, {1})", field, compareWith)
                 }
             }
-            
+
             DatabaseSource.BIGQUERY -> {
                 if (isCaseInsensitive) {
                     condition("REGEXP_CONTAINS(LOWER({0}), LOWER({1}))", field, compareWith)
@@ -241,7 +249,7 @@ class DefaultQuery<T : ColumnType>(
                     condition("REGEXP_CONTAINS({0}, {1})", field, compareWith)
                 }
             }
-            
+
             DatabaseSource.REDSHIFT -> {
                 if (isCaseInsensitive) {
                     condition("REGEXP_LIKE(LOWER({0}), LOWER({1}))", field, compareWith)
@@ -249,7 +257,7 @@ class DefaultQuery<T : ColumnType>(
                     condition("REGEXP_LIKE({0}, {1})", field, compareWith)
                 }
             }
-            
+
             DatabaseSource.DATABRICKS -> {
                 if (isCaseInsensitive) {
                     condition("REGEXP_LIKE(LOWER({0}), LOWER({1}))", field, compareWith)
@@ -257,7 +265,7 @@ class DefaultQuery<T : ColumnType>(
                     condition("REGEXP_LIKE({0}, {1})", field, compareWith)
                 }
             }
-            
+
             else -> throw ConnectorError.NotSupported("Regex operations not supported for this database")
         }
         return if (isNegated) not(expr) else expr
@@ -277,7 +285,7 @@ class DefaultQuery<T : ColumnType>(
                     field.like(compareWith.cast(SQLDataType.VARCHAR))
                 }
             }
-            
+
             DatabaseSource.BIGQUERY -> {
                 if (isCaseInsensitive) {
                     condition("LOWER({0}) LIKE LOWER({1})", field, compareWith)
@@ -285,7 +293,7 @@ class DefaultQuery<T : ColumnType>(
                     condition("{0} LIKE {1}", field, compareWith)
                 }
             }
-            
+
             DatabaseSource.REDSHIFT -> {
                 if (isCaseInsensitive) {
                     field.likeIgnoreCase(compareWith.cast(SQLDataType.VARCHAR))
@@ -293,7 +301,7 @@ class DefaultQuery<T : ColumnType>(
                     field.like(compareWith.cast(SQLDataType.VARCHAR))
                 }
             }
-            
+
             DatabaseSource.DATABRICKS -> {
                 if (isCaseInsensitive) {
                     condition("LOWER({0}) LIKE LOWER({1})", field, compareWith)
@@ -301,7 +309,7 @@ class DefaultQuery<T : ColumnType>(
                     condition("{0} LIKE {1}", field, compareWith)
                 }
             }
-            
+
             else -> throw ConnectorError.NotSupported("Ilike operations not supported for this database")
         }
         return if (isNegated) not(expr) else expr
@@ -325,7 +333,7 @@ class DefaultQuery<T : ColumnType>(
                     throw ConnectorError.NotSupported("Aggregate operations are not supported in order by")
                 }
             }
-        }?: emptyList()
+        } ?: emptyList()
     }
 
     private fun buildVariablesCTE(): CommonTableExpression<Record> {
@@ -364,11 +372,11 @@ class DefaultQuery<T : ColumnType>(
         val fields = getFieldSelects().map { field(name(resultTableName, it.field.name)) }.toTypedArray()
         val partitionFields = buildPartitionFields()
         val resultTable = table(name(request.collection.split("."))).`as`(resultTableName)
-        
+
         return select(
-                field("{0}.*", Any::class.java, name(resultTable.name)), // Why doesn't resultTable.asterisk() work here?
-                *partitionFields
-            )
+            field("{0}.*", Any::class.java, name(resultTable.name)), // Why doesn't resultTable.asterisk() work here?
+            *partitionFields
+        )
             .from(resultTable)
             .join(varsCTE)
             .on(getVariablePredicate(resultTable))
@@ -398,6 +406,7 @@ class DefaultQuery<T : ColumnType>(
                         throw ConnectorError.NotSupported("Predicate must use a variable comparison")
                     }
                 }
+
                 else -> throw ConnectorError.NotSupported("Predicate must be a binary comparison")
             }
         } ?: throw ConnectorError.NotSupported("No predicate comparison found")
@@ -409,6 +418,7 @@ class DefaultQuery<T : ColumnType>(
             }
             target.name
         }
+
         is ComparisonTarget.RootCollectionColumn -> {
             if (target.fieldPath != null) {
                 throw ConnectorError.NotSupported("Nested fields are not supported in predicates")
@@ -441,9 +451,9 @@ class DefaultQuery<T : ColumnType>(
         .with(resultsCTE)
         .select(
             *fields.toTypedArray() +
-            arrayOf(
-                field(name(resultsCTEName, indexName))
-            )
+                    arrayOf(
+                        field(name(resultsCTEName, indexName))
+                    )
         )
         .from(resultsCTE)
 
@@ -466,7 +476,7 @@ class DefaultQuery<T : ColumnType>(
         query: SelectWhereStep<Record>,
     ): SelectSeekStepN<Record> = query.orderBy(
         listOf(field(name(indexName))) +
-        getOrderByFields()
+                getOrderByFields()
     )
 
     private fun convertJsonPrimitive(primitive: JsonPrimitive): Any = when {
@@ -478,7 +488,7 @@ class DefaultQuery<T : ColumnType>(
         else -> primitive.content
     }
 
-    private fun convertJsonArray(array: JsonArray): List<Any> = 
+    private fun convertJsonArray(array: JsonArray): List<Any> =
         array.map { element ->
             when (element) {
                 is JsonPrimitive -> convertJsonPrimitive(element)
@@ -486,7 +496,7 @@ class DefaultQuery<T : ColumnType>(
             }
         }
 
-    private fun convertJsonValue(value: ComparisonValue.Scalar): Any = 
+    private fun convertJsonValue(value: ComparisonValue.Scalar): Any =
         when (val jsonElement = value.value) {
             is JsonPrimitive -> convertJsonPrimitive(jsonElement)
             is JsonArray -> convertJsonArray(jsonElement)
@@ -516,10 +526,11 @@ class DefaultQuery<T : ColumnType>(
                     },
                     alias = alias
                 )
+
                 else -> throw ConnectorError.NotSupported("Unsupported: Relationships are not supported")
             }
         } ?: emptyList()
-    
+
     private fun List<FieldWithAlias<T>>.withCasts(collection: String): List<FieldWithAlias<T>> =
         map { fieldWithAlias ->
             fieldWithAlias.copy(
@@ -579,9 +590,11 @@ class DefaultQuery<T : ColumnType>(
 
                         return column.type
                     }
+
                     else -> throw ConnectorError.NotSupported("Unsupported: Relationships are not supported")
                 }
             }
+
             is FieldOrAggregate.AggregateType -> {
                 val table = configuration.tables.find { it.name == collection }
                     ?: error("Table $collection not found in connector configuration")
@@ -593,6 +606,7 @@ class DefaultQuery<T : ColumnType>(
 
                         return column.type
                     }
+
                     is Aggregate.ColumnCount -> return null
                 }
             }

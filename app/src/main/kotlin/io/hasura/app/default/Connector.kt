@@ -1,22 +1,28 @@
 package io.hasura.app.default
 
-import io.hasura.app.base.*
-import io.hasura.ndc.connector.*
+import io.hasura.app.base.DatabaseConnection
+import io.hasura.app.base.DatabaseSource
+import io.hasura.common.ColumnType
+import io.hasura.common.DefaultConfiguration
+import io.hasura.ndc.connector.Connector
+import io.hasura.ndc.connector.ConnectorLogger
+import io.hasura.ndc.connector.Telemetry
 import io.hasura.ndc.ir.*
 import io.micrometer.core.instrument.MeterRegistry
-import kotlinx.serialization.json.*
-import java.nio.file.Path
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
-import io.hasura.common.*
-import kotlinx.coroutines.*
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import java.nio.file.Path
 
 class DefaultState<T : ColumnType>(
     val configuration: DefaultConfiguration<T>,
     val client: DatabaseConnection
 )
 
-class DefaultConnector<T : ColumnType>(
+open class DefaultConnector<T : ColumnType>(
     private val source: DatabaseSource,
     private val connection: (DefaultConfiguration<T>) -> DatabaseConnection,
     private val schemaGenerator: DefaultSchemaGeneratorClass<T>,
@@ -79,7 +85,7 @@ class DefaultConnector<T : ColumnType>(
 
     fun cleanUpRows(request: QueryRequest, rows: List<Map<String, JsonElement>>?): List<Map<String, JsonElement>>? {
         return rows?.map { row ->
-            row.entries.mapNotNull { (key, value) -> 
+            row.entries.mapNotNull { (key, value) ->
                 request.query.fields?.keys?.find { it.equals(key, ignoreCase = true) }?.let { matchedKey ->
                     matchedKey to value
                 }
@@ -134,19 +140,23 @@ class DefaultConnector<T : ColumnType>(
                         when {
                             variables?.isEmpty() == true ->
                                 QueryResponse(rowSets = emptyList())
+
                             variables == null ->
-                                QueryResponse(rowSets = listOf(RowSet(
-                                    rows = cleanUpRows(request, rows),
-                                    aggregates = aggregates?.let { agg -> 
-                                        agg.filterKeys { key -> 
-                                            request.query.aggregates?.containsKey(key) == true 
-                                        }
-                                    }?.let { JsonObject(it) }
-                                )))
+                                QueryResponse(
+                                    rowSets = listOf(
+                                        RowSet(
+                                            rows = cleanUpRows(request, rows),
+                                            aggregates = aggregates?.let { agg ->
+                                                agg.filterKeys { key ->
+                                                    request.query.aggregates?.containsKey(key) == true
+                                                }
+                                            }?.let { JsonObject(it) }
+                                        )))
+
                             else ->
                                 QueryResponse(rowSets = variables.indices.map { index ->
-                                    RowSet(rows = rows?.filter { row -> 
-                                        row[indexName]?.toString()?.toIntOrNull() == index 
+                                    RowSet(rows = rows?.filter { row ->
+                                        row[indexName]?.toString()?.toIntOrNull() == index
                                     }?.let { filteredRows ->
                                         cleanUpRows(request, filteredRows)
                                     })
@@ -175,4 +185,5 @@ class DefaultConnector<T : ColumnType>(
     ): MutationResponse {
         throw UnsupportedOperationException("Mutation is not supported")
     }
+
 }

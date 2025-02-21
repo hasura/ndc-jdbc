@@ -6,5 +6,6 @@ enum class DatabaseSource {
     // MYSQL,
     // ORACLE,
     DATABRICKS,
-    REDSHIFT
+    REDSHIFT,
+    POSTGRES
 }

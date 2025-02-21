@@ -1,0 +1,6 @@
+POST http://localhost:8087/sql
+Content-Type: application/json
+
+{
+  "sql": "SELECT \"AlbumId\", \"Title\" FROM \"Album\" WHERE \"AlbumId\" = 1"
+}
