@@ -107,11 +107,11 @@ jobs:
             exit 1
           fi
 
-      - name: View Test Output Log
+      - name: View Connector Output Log
         if: always()  # Ensures it runs even if tests fail
         run: |
-          echo "===== Test Output Log ====="
-          cat test-output.log || echo "test-output.log not found"
+          echo "===== Connector Output Log ====="
+          cat connector.log || echo "connector.log not found"
 
       - name: Stop Connector
         if: always()
