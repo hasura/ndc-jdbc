@@ -133,8 +133,8 @@ endif
 		-t ndc-snowflake-jdbc-cli:v${VERSION} .
 
 publish-snowflake:
-	publish-snowflake-app
-	publish-snowflake-cli
+	$(MAKE) publish-snowflake-app
+	$(MAKE) publish-snowflake-cli
 
 publish-snowflake-app:
 ifndef VERSION
