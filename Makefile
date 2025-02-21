@@ -107,8 +107,8 @@ docker-snowflake:
 ifndef VERSION
 	$(error VERSION is not set. Please set VERSION before running this target)
 endif
-	docker-snowflake-app
-	docker-snowflake-cli
+	$(MAKE) docker-snowflake-app
+	$(MAKE) docker-snowflake-cli
 
 docker-snowflake-app:
 ifndef VERSION

@@ -4,11 +4,6 @@ on:
   push:
     tags:
       - 'snowflake/v*'
-      - 'bigquery/v*'
-      - 'redshift/v*'
-      - 'databricks/v*'
-      - 'mysql/v*'
-      - 'oracle/v*'
 
 jobs:
   release:
