@@ -44,9 +44,9 @@ jobs:
           file: ./Dockerfile.app
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/hasura/ndc-snowflake-jdbc:v${{ steps.version.outputs.version }}
+          tags: ghcr.io/hasura/ndc-${{ steps.version.outputs.connector }}-jdbc:v${{ steps.version.outputs.version }}
           build-args: |
-            SOURCE=snowflake
+            SOURCE=${{ steps.version.outputs.connector }}
             JOOQ_PRO_EMAIL=${{ secrets.JOOQ_PRO_EMAIL }}
             JOOQ_PRO_LICENSE=${{ secrets.JOOQ_PRO_LICENSE }}
 
@@ -57,9 +57,9 @@ jobs:
           file: ./Dockerfile.cli
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/hasura/ndc-snowflake-jdbc-cli:v${{ steps.version.outputs.version }}
+          tags: ghcr.io/hasura/ndc-${{ steps.version.outputs.connector }}-jdbc-cli:v${{ steps.version.outputs.version }}
           build-args: |
-            SOURCE=snowflake
+            SOURCE=${{ steps.version.outputs.connector }}
             JOOQ_PRO_EMAIL=${{ secrets.JOOQ_PRO_EMAIL }}
             JOOQ_PRO_LICENSE=${{ secrets.JOOQ_PRO_LICENSE }}
 
@@ -72,7 +72,7 @@ jobs:
           cat > .hasura-connector/connector-metadata.yaml << EOF
           packagingDefinition:
             type: PrebuiltDockerImage
-            dockerImage: "ghcr.io/hasura/ndc-snowflake-jdbc:v${{ steps.version.outputs.version }}"
+            dockerImage: "ghcr.io/hasura/ndc-${{ steps.version.outputs.connector }}-jdbc:v${{ steps.version.outputs.version }}"
           supportedEnvironmentVariables:
             - name: JDBC_URL
               description: "The JDBC URL to connect to the database"
@@ -81,12 +81,12 @@ jobs:
           commands:
             update:
               type: Dockerized
-              dockerImage: ghcr.io/hasura/ndc-snowflake-cli:v${{ steps.version.outputs.version }}
+              dockerImage: ghcr.io/hasura/ndc-${{ steps.version.outputs.connector }}-cli:v${{ steps.version.outputs.version }}
               commandArgs: [update, --jdbc-url, JDBC_URL, --schemas, \$JDBC_SCHEMAS, --outfile, /etc/connector/configuration.json]
           EOF
 
           # Create tarball
-          tar -czf snowflake-connector-v${{ steps.version.outputs.version }}.tar.gz .hasura-connector/
+          tar -czf ${{ steps.version.outputs.connector }}-connector-v${{ steps.version.outputs.version }}.tar.gz .hasura-connector/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
@@ -94,4 +94,4 @@ jobs:
           name: "${{ steps.version.outputs.connector }} v${{ steps.version.outputs.version }}"
           generate_release_notes: true
           files: |
-            snowflake-connector-v${{ steps.version.outputs.version }}.tar.gz
+            ${{ steps.version.outputs.connector }}-connector-v${{ steps.version.outputs.version }}.tar.gz
