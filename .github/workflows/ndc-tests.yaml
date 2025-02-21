@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        connector: [snowflake]
+        connector: [snowflake, bigquery, databricks]
         include:
           - connector: snowflake
             jdbc_url_env: SNOWFLAKE_JDBC_URL
@@ -18,6 +18,19 @@ jobs:
             run_command: make run-snowflake
             test_dir: ndc-tests/snowflake
             port: 8081
+          - connector: bigquery
+            jdbc_url_env: BIGQUERY_JDBC_URL
+            key_file: BIGQUERY_KEY_FILE
+            config_command: make run-bigquery-introspection
+            run_command: make run-bigquery
+            test_dir: ndc-tests/bigquery
+            port: 8082
+          - connector: databricks
+            jdbc_url_env: DATABRICKS_JDBC_URL
+            config_command: make run-databricks-introspection
+            run_command: make run-databricks
+            test_dir: ndc-tests/databricks
+            port: 8085
 
     steps:
       - name: Checkout repo
@@ -35,9 +48,24 @@ jobs:
           chmod +x ndc-test
           sudo mv ndc-test /usr/local/bin/
 
+      - name: Set JDBC_URL
+        run: |
+          if [[ "${{ matrix.connector }}" == "bigquery" ]]; then
+            echo "Handling BigQuery credentials..."
+            echo "${{ secrets[matrix.key_file] }}" | base64 --decode > key.json
+            echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/key.json" >> $GITHUB_ENV
+
+            # Append key path to BigQuery JDBC URL
+            JDBC_URL="${{ secrets[matrix.jdbc_url_env] }}$(pwd)/key.json"
+            echo "JDBC_URL=$JDBC_URL" >> $GITHUB_ENV
+          else
+            # Keep JDBC_URL the same for non-BigQuery connectors
+            echo "JDBC_URL=${{ secrets[matrix.jdbc_url_env] }}" >> $GITHUB_ENV
+          fi
+
       - name: Generate configuration
         env:
-          JDBC_URL: ${{ secrets[matrix.jdbc_url_env] }}
+          JDBC_URL: ${{ env.JDBC_URL }}
           JOOQ_PRO_EMAIL: ${{ secrets.JOOQ_PRO_EMAIL }}
           JOOQ_PRO_LICENSE: ${{ secrets.JOOQ_PRO_LICENSE }}
         run: |
@@ -50,7 +78,7 @@ jobs:
 
       - name: Run the connector
         env:
-          JDBC_URL: ${{ secrets[matrix.jdbc_url_env] }}
+          JDBC_URL: ${{ env.JDBC_URL }}
           JOOQ_PRO_EMAIL: ${{ secrets.JOOQ_PRO_EMAIL }}
           JOOQ_PRO_LICENSE: ${{ secrets.JOOQ_PRO_LICENSE }}
         run: |
