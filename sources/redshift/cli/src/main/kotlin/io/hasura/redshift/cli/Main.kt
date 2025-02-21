@@ -80,13 +80,14 @@ object RedshiftConfigGenerator : IConfigGenerator<RedshiftConfiguration, Redshif
 
     private fun introspectSchemas(config: RedshiftConfiguration): IntrospectionResult {
         val jdbcUrl = config.connectionUri.resolve()
+        val catalog = extractCatalog(jdbcUrl)
 
         // Schemacrawler options
         val options = SchemaCrawlerOptionsBuilder.newSchemaCrawlerOptions()
             .withLimitOptions(
                 LimitOptionsBuilder.builder()
                     .tableTypes(null as String?)
-                    .includeSchemas(includeSchemas(extractCatalog(jdbcUrl), config.schemas))
+                    .includeSchemas(includeSchemas(catalog, config.schemas))
                     .toOptions()
             )
         val results = SchemaCrawlerUtility.getCatalog(
@@ -99,7 +100,7 @@ object RedshiftConfigGenerator : IConfigGenerator<RedshiftConfiguration, Redshif
         try {
             val tables = results.tables.map { table ->
                 TableInfo<RedshiftDataType>(
-                    name = table.name,
+                    name = "${catalog}.${table.schema.name}.${table.name}",
                     category = when (table.tableType.tableType) {
                         "TABLE" -> Category.TABLE
                         "VIEW" -> Category.VIEW
@@ -122,7 +123,16 @@ object RedshiftConfigGenerator : IConfigGenerator<RedshiftConfiguration, Redshif
                         )
                     },
                     primaryKeys = emptyList(),
-                    foreignKeys = emptyMap()
+                    foreignKeys = table.foreignKeys.filter {
+                      table.name != it.primaryKeyTable.name
+                    }.associate { fk ->
+                      fk.name to ForeignKeyInfo(
+                        columnMapping = fk.columnReferences.associate { 
+                          it.primaryKeyColumn.name to it.foreignKeyColumn.name 
+                        },
+                        foreignCollection = fk.referencedTable.name
+                      )
+                    }
                 )
             }
 
