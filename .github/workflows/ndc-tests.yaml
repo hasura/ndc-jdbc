@@ -76,10 +76,6 @@ jobs:
             exit 1
           }
 
-      - name: View Generated Configuration
-        run: |
-          cat configs/${{ matrix.connector }}/configuration.json
-
       - name: Run the connector
         env:
           JDBC_URL: ${{ env.JDBC_URL }}
@@ -106,12 +102,6 @@ jobs:
             echo "Tests failed with exit code $exit_code"
             exit 1
           fi
-
-      - name: View Connector Output Log
-        if: always()  # Ensures it runs even if tests fail
-        run: |
-          echo "===== Connector Output Log ====="
-          cat connector.log || echo "connector.log not found"
 
       - name: Stop Connector
         if: always()
