@@ -1,8 +1,8 @@
 {
-  "collection": "invoices",
+  "collection": "chinook.default.invoices",
   "query": {
     "aggregates": {
-      "how_many_invoices": {
+      "how_many_chinook.default.invoices": {
         "type": "star_count"
       },
       "min_invoice_id": {
