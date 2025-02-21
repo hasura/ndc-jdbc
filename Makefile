@@ -118,6 +118,13 @@ run-redshift:
 	HASURA_CONFIGURATION_DIRECTORY=../../../configs/redshift \
 	./gradlew :sources:redshift:app:run
 
+run-postgres:
+	OTEL_SERVICE_NAME=ndc-postgres \
+	HASURA_LOG_LEVEL=debug \
+	HASURA_CONNECTOR_PORT=8087 \
+	HASURA_CONFIGURATION_DIRECTORY=../../../configs/postgres \
+	./gradlew :sources:postgres:app:run
+
 docker-snowflake:
 ifndef VERSION
 	$(error VERSION is not set. Please set VERSION before running this target)

@@ -1,0 +1,18 @@
+version: "3"
+
+services:
+  #  jdbc:postgresql://localhost:5431/postgres?user=postgres&password=example
+  postgres:
+    image: postgres:17.3-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: example
+    ports:
+      - "5431:5432"
+    volumes:
+      - ./docker/postgres-chinook.sql:/docker-entrypoint-initdb.d/postgres-chinook.sql
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:
