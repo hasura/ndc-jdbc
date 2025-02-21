@@ -1,0 +1,82 @@
+[
+  {
+    "aggregates": {
+      "albumId_sum": "9",
+      "albumId_avg": "9.0",
+      "albumId_max": "9",
+      "albumId_min": "9"
+    }
+  },
+  {
+    "aggregates": {
+      "albumId_sum": "12",
+      "albumId_avg": "12.0",
+      "albumId_max": "12",
+      "albumId_min": "12"
+    }
+  },
+  {
+    "aggregates": {
+      "albumId_sum": "7",
+      "albumId_avg": "7.0",
+      "albumId_max": "7",
+      "albumId_min": "7"
+    }
+  },
+  {
+    "aggregates": {
+      "albumId_sum": "5",
+      "albumId_avg": "2.5",
+      "albumId_max": "3",
+      "albumId_min": "2"
+    }
+  },
+  {
+    "aggregates": {
+      "albumId_sum": "13",
+      "albumId_avg": "13.0",
+      "albumId_max": "13",
+      "albumId_min": "13"
+    }
+  },
+  {
+    "aggregates": {
+      "albumId_sum": "5",
+      "albumId_avg": "2.5",
+      "albumId_max": "4",
+      "albumId_min": "1"
+    }
+  },
+  {
+    "aggregates": {
+      "albumId_sum": "6",
+      "albumId_avg": "6.0",
+      "albumId_max": "6",
+      "albumId_min": "6"
+    }
+  },
+  {
+    "aggregates": {
+      "albumId_sum": "42",
+      "albumId_avg": "21.0",
+      "albumId_max": "34",
+      "albumId_min": "8"
+    }
+  },
+  {
+    "aggregates": {
+      "albumId_sum": "292",
+      "albumId_avg": "97.33333333333333",
+      "albumId_max": "271",
+      "albumId_min": "10"
+    }
+  },
+  {
+    "aggregates": {
+      "albumId_sum": "5",
+      "albumId_avg": "5.0",
+      "albumId_max": "5",
+      "albumId_min": "5"
+    }
+  }
+]

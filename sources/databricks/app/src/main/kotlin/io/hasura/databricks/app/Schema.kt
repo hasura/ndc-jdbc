@@ -3,6 +3,7 @@ package io.hasura.databricks.app
 import io.hasura.app.base.*
 import io.hasura.app.default.*
 import io.hasura.ndc.ir.*
+import io.hasura.ndc.ir.Type
 import io.hasura.common.*
 import io.hasura.databricks.common.DatabricksDataType
 import org.jooq.impl.DSL.*
@@ -19,13 +20,13 @@ class DatabricksSchemaGenerator : DefaultSchemaGenerator<DatabricksDataType>() {
                 val (precision, scale) = columnType
                 when {
                     scale == 0 -> when {
-                        precision <= 2 -> RepresentationType.Int8
+                        precision!! <= 2 -> RepresentationType.Int8
                         precision <= 4 -> RepresentationType.Int16
                         precision <= 9 -> RepresentationType.Int32
                         precision <= 18 -> RepresentationType.Int64
                         else -> RepresentationType.Biginteger
                     }
-                    scale > 0 -> RepresentationType.Bigdecimal
+                    scale!! > 0 -> RepresentationType.Bigdecimal
                     else -> RepresentationType.Bigdecimal
                 }
             }
@@ -33,11 +34,10 @@ class DatabricksSchemaGenerator : DefaultSchemaGenerator<DatabricksDataType>() {
             is DatabricksDataType.MAP -> RepresentationType.JSON
             is DatabricksDataType.STRUCT -> RepresentationType.JSON
             DatabricksDataType.BOOLEAN -> RepresentationType.TypeBoolean
-            DatabricksDataType.BYTE -> RepresentationType.Int8
-            DatabricksDataType.SHORT -> RepresentationType.Int16
+            DatabricksDataType.TINYINT -> RepresentationType.Int8
+            DatabricksDataType.SMALLINT -> RepresentationType.Int16
             DatabricksDataType.INT -> RepresentationType.Int32
             DatabricksDataType.BIGINT -> RepresentationType.Int64
-            DatabricksDataType.LONG -> RepresentationType.Int64
             DatabricksDataType.FLOAT -> RepresentationType.Float32
             DatabricksDataType.DOUBLE -> RepresentationType.Float64
             DatabricksDataType.STRING -> RepresentationType.TypeString
@@ -46,9 +46,8 @@ class DatabricksSchemaGenerator : DefaultSchemaGenerator<DatabricksDataType>() {
             DatabricksDataType.BINARY -> RepresentationType.Bytes
             DatabricksDataType.DATE -> RepresentationType.Date
             DatabricksDataType.TIMESTAMP -> RepresentationType.Timestamp
-            DatabricksDataType.GEOMETRY -> RepresentationType.Geometry
-            DatabricksDataType.GEOGRAPHY -> RepresentationType.Geography
-            else -> null
+            DatabricksDataType.TIMESTAMP_NTZ -> RepresentationType.Timestamptz
+            DatabricksDataType.VARIANT -> RepresentationType.JSON
         }
         
         return createScalarType(representationType, columnType)
@@ -63,11 +62,10 @@ class DatabricksSchemaGenerator : DefaultSchemaGenerator<DatabricksDataType>() {
             is DatabricksDataType.MAP -> SQLDataType.JSON
             is DatabricksDataType.STRUCT -> SQLDataType.JSON
             DatabricksDataType.BOOLEAN -> SQLDataType.BOOLEAN
-            DatabricksDataType.BYTE -> SQLDataType.TINYINT
-            DatabricksDataType.SHORT -> SQLDataType.SMALLINT
+            DatabricksDataType.TINYINT -> SQLDataType.TINYINT
+            DatabricksDataType.SMALLINT -> SQLDataType.SMALLINT
             DatabricksDataType.INT -> SQLDataType.INTEGER
             DatabricksDataType.BIGINT -> SQLDataType.BIGINT
-            DatabricksDataType.LONG -> SQLDataType.BIGINT
             DatabricksDataType.FLOAT -> SQLDataType.REAL
             DatabricksDataType.DOUBLE -> SQLDataType.DOUBLE
             DatabricksDataType.STRING -> SQLDataType.CLOB
@@ -76,10 +74,8 @@ class DatabricksSchemaGenerator : DefaultSchemaGenerator<DatabricksDataType>() {
             DatabricksDataType.BINARY -> SQLDataType.BINARY
             DatabricksDataType.DATE -> SQLDataType.DATE
             DatabricksDataType.TIMESTAMP -> SQLDataType.TIMESTAMP
-            DatabricksDataType.INTERVAL -> SQLDataType.INTERVAL
-            DatabricksDataType.GEOMETRY -> SQLDataType.JSON
-            DatabricksDataType.GEOGRAPHY -> SQLDataType.JSON
-            else -> SQLDataType.CLOB
+            DatabricksDataType.TIMESTAMP_NTZ -> SQLDataType.TIMEWITHTIMEZONE
+            DatabricksDataType.VARIANT -> SQLDataType.JSON
         }
     }
 
@@ -91,17 +87,77 @@ class DatabricksSchemaGenerator : DefaultSchemaGenerator<DatabricksDataType>() {
             is DatabricksDataType.DECIMAL -> {
                 val (precision, scale) = columnType
                 when {
-                    scale == 0 && precision > 18 ->
+                    scale == 0 && precision!! > 18 ->
                         cast(field, SQLDataType.VARCHAR(255))
-                    scale > 0 && precision > 15 -> 
+                    scale!! > 0 && precision!! > 15 -> 
                         cast(field, SQLDataType.VARCHAR(255))
                     else -> field
                 }
             }
             DatabricksDataType.BIGINT -> cast(field, SQLDataType.VARCHAR(255))
-            DatabricksDataType.GEOGRAPHY, DatabricksDataType.GEOMETRY -> 
-                cast(field("ST_AsGeoJSON({0})", Any::class.java, field), SQLDataType.JSON)
+            is DatabricksDataType.ARRAY -> cast(field, SQLDataType.JSON)
+            is DatabricksDataType.MAP -> cast(field, SQLDataType.JSON)
+            is DatabricksDataType.STRUCT -> cast(field, SQLDataType.JSON)
+            DatabricksDataType.VARIANT -> cast(field, SQLDataType.JSON)
             else -> field
+        }
+    }
+
+    private fun getSupportedOperators(columnType: DatabricksDataType): List<String> {
+        val baseOperators = listOf("_eq", "_neq", "_in")
+        val comparisonOperators = listOf("_gt", "_lt", "_gte", "_lte")
+        val textOperators = listOf(
+            "_like", "_ilike", "_nlike", "_nilike",
+            "_regex", "_iregex", "_nregex", "_niregex"
+        )
+
+        return when (columnType) {
+            DatabricksDataType.STRING,
+            DatabricksDataType.CHAR,
+            DatabricksDataType.VARCHAR -> baseOperators + comparisonOperators + textOperators
+            
+            is DatabricksDataType.DECIMAL,
+            DatabricksDataType.BIGINT,
+            DatabricksDataType.INT,
+            DatabricksDataType.SMALLINT,
+            DatabricksDataType.TINYINT,
+            DatabricksDataType.FLOAT,
+            DatabricksDataType.DOUBLE -> baseOperators + comparisonOperators
+            
+            DatabricksDataType.DATE,
+            DatabricksDataType.TIMESTAMP,
+            DatabricksDataType.TIMESTAMP_NTZ -> baseOperators + comparisonOperators
+            
+            DatabricksDataType.BOOLEAN,
+            is DatabricksDataType.ARRAY,
+            is DatabricksDataType.MAP,
+            is DatabricksDataType.STRUCT,
+            DatabricksDataType.VARIANT,
+            DatabricksDataType.BINARY -> baseOperators
+        }
+    }
+
+    override fun mapComparisonOperators(
+        columnType: DatabricksDataType,
+        representation: TypeRepresentation?
+    ): Map<String, ComparisonOperatorDefinition> {
+        val operators = getSupportedOperators(columnType)
+
+        return operators.associateWith { oper ->
+            when (oper) {
+                "_eq" -> ComparisonOperatorDefinition(
+                    type = ComparisonOperatorDefinitionType.Equal,
+                    argumentType = null
+                )
+                "_in" -> ComparisonOperatorDefinition(
+                    type = ComparisonOperatorDefinitionType.In,
+                    argumentType = null
+                )
+                else -> ComparisonOperatorDefinition(
+                    type = ComparisonOperatorDefinitionType.Custom,
+                    argumentType = Type.Named(name = columnType.typeName)
+                )
+            }
         }
     }
 }

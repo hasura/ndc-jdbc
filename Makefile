@@ -1,4 +1,8 @@
 .PHONY: build \
+    build-snowflake build-snowflake-app build-snowflake-cli \
+    build-bigquery build-bigquery-app build-bigquery-cli \
+    build-redshift build-redshift-app build-redshift-cli \
+    build-databricks build-databricks-app build-databricks-cli \
     run-snowflake run-bigquery run-mysql run-oracle run-databricks run-redshift \
     docker-snowflake docker-snowflake-app docker-snowflake-cli \
     publish-snowflake publish-snowflake-app publish-snowflake-cli \
@@ -10,6 +14,46 @@
 
 build:
 	./gradlew build
+
+build-snowflake:
+	build-snowflake-app
+	build-snowflake-cli
+
+build-snowflake-app:
+	./gradlew :sources:snowflake:app:build
+
+build-snowflake-cli:
+	./gradlew :sources:snowflake:app:build
+
+build-bigquery:
+	build-bigquery-app
+	build-bigquery-cli
+
+build-bigquery-app:
+	./gradlew :sources:bigquery:app:build
+
+build-bigquery-cli:
+	./gradlew :sources:bigquery:app:build
+
+build-redshift:
+	build-redshift-app
+	build-redshift-cli
+
+build-redshift-app:
+	./gradlew :sources:redshift:app:build
+
+build-redshift-cli:
+	./gradlew :sources:redshift:app:build
+
+build-databricks:
+	build-databricks-app
+	build-databricks-cli
+
+build-databricks-app:
+	./gradlew :sources:databricks:app:build
+
+build-databricks-cli:
+	./gradlew :sources:databricks:app:build
 
 run-snowflake:
 	OTEL_SERVICE_NAME=ndc-snowflake \

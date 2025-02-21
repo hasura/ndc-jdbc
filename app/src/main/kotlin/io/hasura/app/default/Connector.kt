@@ -68,7 +68,7 @@ class DefaultConnector<T : ColumnType>(
         state: DefaultState<T>,
         request: QueryRequest
     ): ExplainResponse {
-        return Telemetry.withActiveSpan("queryExplain") { span ->
+        return Telemetry.withActiveSpan("queryExplain") { _ ->
             ExplainResponse(
                 details = mapOf(
                     "plan" to "Jdbc query plan"
@@ -108,6 +108,8 @@ class DefaultConnector<T : ColumnType>(
                         )
                         val queryExecutor = DefaultConnection(state.client)
 
+                        ConnectorLogger.logger.debug("Request: $request")
+
                         // Handle regular query results
                         val rowsAsync = async {
                             request.query.fields?.let {
@@ -127,7 +129,6 @@ class DefaultConnector<T : ColumnType>(
                         val rows = rowsAsync.await()
                         val aggregates = aggregatesAsync.await()
 
-                        ConnectorLogger.logger.debug("Request: $request")
                         ConnectorLogger.logger.debug("Rows: $rows")
                         ConnectorLogger.logger.debug("Aggregates: $aggregates")
 

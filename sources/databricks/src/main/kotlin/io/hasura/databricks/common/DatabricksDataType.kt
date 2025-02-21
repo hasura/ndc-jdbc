@@ -14,12 +14,12 @@ sealed class DatabricksDataType : ColumnType {
     object BOOLEAN : DatabricksDataType()
 
     @Serializable
-    @SerialName("BYTE")
-    object BYTE : DatabricksDataType()
+    @SerialName("TINYINT")
+    object TINYINT : DatabricksDataType()
 
     @Serializable
-    @SerialName("SHORT")
-    object SHORT : DatabricksDataType()
+    @SerialName("SMALLINT")
+    object SMALLINT : DatabricksDataType()
 
     @Serializable
     @SerialName("INT")
@@ -28,10 +28,6 @@ sealed class DatabricksDataType : ColumnType {
     @Serializable
     @SerialName("BIGINT")
     object BIGINT : DatabricksDataType()
-
-    @Serializable
-    @SerialName("LONG")
-    object LONG : DatabricksDataType()
 
     @Serializable
     @SerialName("FLOAT")
@@ -44,8 +40,8 @@ sealed class DatabricksDataType : ColumnType {
     @Serializable
     @SerialName("DECIMAL")
     data class DECIMAL(
-        val precision: Int,
-        val scale: Int
+        val precision: Int?,
+        val scale: Int?
     ) : DatabricksDataType()
 
     @Serializable
@@ -73,8 +69,12 @@ sealed class DatabricksDataType : ColumnType {
     object TIMESTAMP : DatabricksDataType()
 
     @Serializable
-    @SerialName("INTERVAL")
-    object INTERVAL : DatabricksDataType()
+    @SerialName("TIMESTAMP_NTZ")
+    object TIMESTAMP_NTZ : DatabricksDataType()
+
+    @Serializable
+    @SerialName("VARIANT")
+    object VARIANT : DatabricksDataType()
 
     @Serializable
     @SerialName("ARRAY")
@@ -91,14 +91,6 @@ sealed class DatabricksDataType : ColumnType {
     @Serializable
     @SerialName("STRUCT_FIELD")
     data class StructField(val name: String, val type: DatabricksDataType)
-
-    @Serializable
-    @SerialName("GEOMETRY")
-    object GEOMETRY : DatabricksDataType()
-
-    @Serializable
-    @SerialName("GEOGRAPHY")
-    object GEOGRAPHY : DatabricksDataType()
 
     override val typeName: String = when (this) {
         is DECIMAL -> "DECIMAL"

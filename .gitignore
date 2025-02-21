@@ -2,6 +2,7 @@
 .kotlin
 http
 configs
+kls_database.db
 
 # Gradle
 .gradle/
@@ -32,6 +33,7 @@ nb-configuration.xml
 # Vim
 *.swp
 *.swo
+.nvim.lua
 
 # patch
 *.orig
