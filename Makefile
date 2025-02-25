@@ -6,10 +6,13 @@
     run-snowflake run-bigquery run-mysql run-oracle run-databricks run-redshift \
     docker-snowflake docker-snowflake-app docker-snowflake-cli \
     publish-snowflake publish-snowflake-app publish-snowflake-cli \
+    publish-bigquery publish-bigquery-app publish-bigquery-cli \
+    publish-databricks publish-databricks-app publish-databricks-cli \
     docker-bigquery docker-bigquery-app docker-bigquery-cli \
     docker-redshift docker-redshift-app docker-redshift-cli \
     docker-databricks docker-databricks-app docker-databricks-cli \
-    run-snowflake-cli
+	  run-snowflake-introspection run-bigquery-introspection \
+	  run-databricks-introspection run-snowflake-cli
 
 
 build:
@@ -67,6 +70,18 @@ ifndef JDBC_URL
 	$(error JDBC_URL environment variable is not set)
 endif
 	./gradlew ':sources:snowflake:cli:run' --args="update --jdbc-url JDBC_URL --outfile ../../../configs/snowflake/configuration.json"
+
+run-bigquery-introspection:
+ifndef JDBC_URL
+	$(error JDBC_URL environment variable is not set)
+endif
+	./gradlew ':sources:bigquery:cli:run' --args="update --jdbc-url JDBC_URL --outfile ../../../configs/bigquery/configuration.json"
+
+run-databricks-introspection:
+ifndef JDBC_URL
+	$(error JDBC_URL environment variable is not set)
+endif
+	./gradlew ':sources:databricks:cli:run' --args="update --jdbc-url JDBC_URL --outfile ../../../configs/databricks/configuration.json"
 
 run-bigquery:
 	OTEL_SERVICE_NAME=ndc-bigquery \
@@ -165,8 +180,8 @@ endif
 		--push .
 
 docker-bigquery:
-	docker-bigquery-app
-	docker-bigquery-cli
+	$(MAKE) docker-bigquery-app
+	$(MAKE) docker-bigquery-cli
 
 docker-bigquery-app:
 ifndef VERSION
@@ -190,9 +205,41 @@ endif
 		-f ./Dockerfile.cli \
 		-t ndc-bigquery-jdbc-cli:v${VERSION} .
 
+publish-bigquery:
+	$(MAKE) publish-bigquery-app
+	$(MAKE) publish-bigquery-cli
+
+publish-bigquery-app:
+ifndef VERSION
+	$(error VERSION is not set. Please set VERSION before running this target)
+endif
+	docker buildx build \
+		--build-arg SOURCE=bigquery \
+		--build-arg JOOQ_PRO_EMAIL="${JOOQ_PRO_EMAIL}" \
+		--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
+		-f ./Dockerfile.app \
+		--platform linux/amd64,linux/arm64 \
+		--label "org.opencontainers.image.source=https://github.com/hasura/ndc-jdbc" \
+		-t ghcr.io/hasura/ndc-bigquery-jdbc:v${VERSION} \
+		--push .
+
+publish-bigquery-cli:
+ifndef VERSION
+	$(error VERSION is not set. Please set VERSION before running this target)
+endif
+	docker buildx build \
+		--build-arg SOURCE=bigquery \
+		--build-arg JOOQ_PRO_EMAIL="${JOOQ_PRO_EMAIL}" \
+		--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
+		-f ./Dockerfile.cli \
+		--label "org.opencontainers.image.source=https://github.com/hasura/ndc-jdbc" \
+		--platform linux/amd64,linux/arm64 \
+		-t ghcr.io/hasura/ndc-bigquery-jdbc-cli:v${VERSION} \
+		--push .
+
 docker-redshift:
-	docker-redshift-app
-	docker-redshift-cli
+	$(MAKE) docker-redshift-app
+	$(MAKE) docker-redshift-cli
 
 docker-redshift-app:
 ifndef VERSION
@@ -217,8 +264,8 @@ endif
 		-t ndc-redshift-jdbc-cli:v${VERSION} .
 
 docker-databricks:
-	docker-databricks-app
-	docker-databricks-cli
+	$(MAKE) docker-databricks-app
+	$(MAKE) docker-databricks-cli
 
 docker-databricks-app:
 ifndef VERSION
@@ -241,3 +288,35 @@ endif
 		--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
 		-f ./Dockerfile.cli \
 		-t ndc-databricks-jdbc-cli:v${VERSION} .
+
+publish-databricks:
+	$(MAKE) publish-databricks-app
+	$(MAKE) publish-databricks-cli
+
+publish-databricks-app:
+ifndef VERSION
+	$(error VERSION is not set. Please set VERSION before running this target)
+endif
+	docker buildx build \
+		--build-arg SOURCE=databricks \
+		--build-arg JOOQ_PRO_EMAIL="${JOOQ_PRO_EMAIL}" \
+		--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
+		-f ./Dockerfile.app \
+		--platform linux/amd64,linux/arm64 \
+		--label "org.opencontainers.image.source=https://github.com/hasura/ndc-jdbc" \
+		-t ghcr.io/hasura/ndc-databricks-jdbc:v${VERSION} \
+		--push .
+
+publish-databricks-cli:
+ifndef VERSION
+	$(error VERSION is not set. Please set VERSION before running this target)
+endif
+	docker buildx build \
+		--build-arg SOURCE=databricks \
+		--build-arg JOOQ_PRO_EMAIL="${JOOQ_PRO_EMAIL}" \
+		--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
+		-f ./Dockerfile.cli \
+		--label "org.opencontainers.image.source=https://github.com/hasura/ndc-jdbc" \
+		--platform linux/amd64,linux/arm64 \
+		-t ghcr.io/hasura/ndc-databricks-jdbc-cli:v${VERSION} \
+		--push .

@@ -66,7 +66,9 @@ object BigQueryConfigGenerator : IConfigGenerator<BigQueryConfiguration, BigQuer
 
     @Serializable
     data class ArrayType(
-        val scalarType: String
+        val scalarType: String? = null,
+        val rangeType: String? = null,
+        val structType: Map<String, QueryColumnType>? = null
     )
 
     @Serializable
@@ -103,7 +105,45 @@ object BigQueryConfigGenerator : IConfigGenerator<BigQueryConfiguration, BigQuer
                   CASE
                     WHEN LOWER(c.data_type) LIKE 'array%' THEN
                       JSON_OBJECT('arrayType',
-                        JSON_OBJECT('scalarType', TRIM(REPLACE(REPLACE(LOWER(c.data_type), 'array<', ''), '>', '')))
+                        # We need to case here on the inner type TRIM(REPLACE(REPLACE(LOWER(c.data_type), 'array<', ''), '>', ''))
+                        CASE
+                          WHEN LOWER(TRIM(REPLACE(REPLACE(LOWER(c.data_type), 'array<', ''), '>', ''))) LIKE 'struct%' THEN
+                            JSON_OBJECT('structType',
+                              (SELECT
+                                JSON_OBJECT(
+                                  ARRAY_AGG(TRIM(SPLIT(TRIM(field), ' ')[OFFSET(0)])),
+                                  ARRAY_AGG(JSON_OBJECT('scalarType',
+                                    LOWER(
+                                        IF(
+                                          ARRAY_LENGTH(SPLIT(TRIM(field), ' ')) > 1,
+                                          case TRIM(SPLIT(TRIM(field), ' ')[OFFSET(1)])
+                                            WHEN 'string' THEN 'string'
+                                            WHEN 'bytes' THEN 'bytes'
+                                            WHEN 'int64' THEN 'int64'
+                                            WHEN 'float64' THEN 'float64'
+                                            WHEN 'bool' THEN 'boolean'
+                                            WHEN 'numeric' THEN 'numeric'
+                                            WHEN 'bignumeric' THEN 'bignumeric'
+                                            WHEN 'geography' THEN 'geography'
+                                            WHEN 'date' THEN 'date'
+                                            WHEN 'datetime' THEN 'datetime'
+                                            WHEN 'time' THEN 'time'
+                                            WHEN 'timestamp' THEN 'timestamp'
+                                            WHEN 'json' THEN 'json'
+                                            ELSE 'any'
+                                          END,
+                                          "any"
+                                        )
+                                      )
+                                  ))
+                                )
+                              FROM UNNEST(SPLIT(TRIM(REPLACE(REPLACE(LOWER(c.data_type), 'array<struct<', ''), '>>', '')), ',')) AS field)
+                            )
+                          WHEN LOWER(TRIM(REPLACE(REPLACE(LOWER(c.data_type), 'array<', ''), '>', ''))) LIKE 'range%' THEN
+                            JSON_OBJECT('rangeType', TRIM(REPLACE(REPLACE(LOWER(c.data_type), 'range<', ''), '>', '')))
+                          ELSE
+                            JSON_OBJECT('scalarType', TRIM(REPLACE(REPLACE(LOWER(c.data_type), 'array<', ''), '>', '')))
+                        END
                       )
                     WHEN LOWER(c.data_type) LIKE 'range%' THEN
                       JSON_OBJECT('rangeType', TRIM(REPLACE(REPLACE(LOWER(c.data_type), 'range<', ''), '>', '')))
@@ -323,7 +363,20 @@ object BigQueryConfigGenerator : IConfigGenerator<BigQueryConfiguration, BigQuer
     }
 
     private fun mapToBigQueryType(arrayType: ArrayType): BigQueryType {
-        return BigQueryType.ArrayType(mapToBigQueryType(arrayType.scalarType))
+        return when {
+            arrayType.scalarType != null -> {
+                BigQueryType.ScalarType(BigQueryScalarType.valueOf(arrayType.scalarType.uppercase()))
+            }
+            arrayType.rangeType != null -> {
+                BigQueryType.RangeType(BigQueryRangeDataType.valueOf(arrayType.rangeType.uppercase()))
+            }
+            arrayType.structType != null -> {
+                val structType = arrayType.structType
+                val fields = structType.mapValues { (_, value) -> mapToBigQueryType(value) }
+                BigQueryType.StructType(fields)
+            }
+            else -> throw IllegalArgumentException("Invalid QueryColumnType")
+        }
     }
 
     private fun mapToBigQueryType(scalarType: String): BigQueryType {

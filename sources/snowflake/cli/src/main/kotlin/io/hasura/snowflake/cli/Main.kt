@@ -203,6 +203,7 @@ class UpdateCommand : Subcommand("update", "Update configuration file") {
         } else {
             ConnectionUri(value = jdbcUrl)
         }
+
         // If schemas is empty string or null do empty list
         val cleanedSchemas = schemas?.takeIf { it.isNotEmpty() }?.split(",") ?: emptyList()
         val config = SnowflakeConfiguration(connectionUri, cleanedSchemas)
