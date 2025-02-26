@@ -7,10 +7,8 @@ import io.hasura.app.default.DefaultSchemaGeneratorClass
 import io.hasura.app.default.DefaultState
 import io.hasura.common.ColumnType
 import io.hasura.common.DefaultConfiguration
-import io.hasura.ndc.ir.QueryResponse
-import io.hasura.ndc.ir.RowSet
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.*
 import org.jooq.SQLDialect
 import org.jooq.impl.DSL
 
@@ -30,7 +28,7 @@ class ExperimentalSQLConnector<T : ColumnType>(
         configuration: DefaultConfiguration<out ColumnType>,
         state: DefaultState<out ColumnType>,
         sqlRequest: SQLRequest
-    ): QueryResponse {
+    ): JsonArray {
         return state.client.getConnection().use { connection ->
             val dslContext = DSL.using(connection)
 
@@ -40,24 +38,38 @@ class ExperimentalSQLConnector<T : ColumnType>(
             println("Postgres SQL: $stmt")
 
             val result = dslContext.fetch(stmt).intoMaps()
-
-            QueryResponse(
-                rowSets = listOf(
-                    RowSet(
-                        rows = result.map {
-                            it.mapValues {
-                                when (it.value) {
-                                    is String -> JsonPrimitive(it.value as String)
-                                    is Int -> JsonPrimitive(it.value as Int)
-                                    is Long -> JsonPrimitive(it.value as Long)
-                                    is Double -> JsonPrimitive(it.value as Double)
-                                    else -> JsonPrimitive(it.value.toString())
-                                }
-                            }
-                        }
-                    )
-                )
-            )
+            result.toJsonArray()
         }
     }
+
+    fun Map<String, Any>.toJsonObject(): JsonObject {
+        return buildJsonObject {
+            this@toJsonObject.forEach { (key, value) ->
+                when (value) {
+                    is String -> put(key, value)
+                    is Number -> put(key, value)
+                    is Boolean -> put(key, value)
+                    is Map<*, *> -> put(key, (value as Map<String, Any>).toJsonObject())
+                    is List<*> -> put(key, (value as List<Any>).toJsonArray())
+                    else -> put(key, value.toString())
+                }
+            }
+        }
+    }
+
+    fun List<Any>.toJsonArray(): JsonArray {
+        return buildJsonArray {
+            this@toJsonArray.forEach { item ->
+                when (item) {
+                    is String -> add(item)
+                    is Number -> add(item)
+                    is Boolean -> add(item)
+                    is Map<*, *> -> add((item as Map<String, Any>).toJsonObject())
+                    is List<*> -> add((item as List<Any>).toJsonArray())
+                    else -> add(item.toString())
+                }
+            }
+        }
+    }
+
 }
