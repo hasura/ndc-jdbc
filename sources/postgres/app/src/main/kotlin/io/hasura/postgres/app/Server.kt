@@ -173,6 +173,7 @@ suspend fun <Configuration, State> startServer(
             }
 
             router.post("/query").coHandler { ctx ->
+                println("Got a query request")
                 ctx.handleJsonRequest<QueryRequest, QueryResponse>("query") { request ->
                     connector.query(configuration, state, request)
                 }
@@ -229,25 +230,28 @@ private fun authenticationHandler(ctx: RoutingContext, serviceTokenSecret: Strin
         return
     }
 
-    val expectedAuthHeader = serviceTokenSecret?.let { "Bearer $it" }
-    val authHeader =
-        ctx.request().getHeader("Authorization")?.replace(Regex("^bearer", RegexOption.IGNORE_CASE), "Bearer")
-
-    if (authHeader != expectedAuthHeader) {
-        ctx.response()
-            .setStatusCode(401)
-            .putHeader("content-type", "application/json")
-            .end(
-                Json.encodeToString(
-                    ErrorResponse(
-                        details = JsonObject(mapOf("cause" to JsonPrimitive("Bearer token does not match."))),
-                        message = "Internal Error"
-                    )
-                )
-            )
-        return
-    }
     ctx.next()
+    return
+
+//    val expectedAuthHeader = serviceTokenSecret?.let { "Bearer $it" }
+//    val authHeader =
+//        ctx.request().getHeader("Authorization")?.replace(Regex("^bearer", RegexOption.IGNORE_CASE), "Bearer")
+//
+//    if (authHeader != expectedAuthHeader) {
+//        ctx.response()
+//            .setStatusCode(401)
+//            .putHeader("content-type", "application/json")
+//            .end(
+//                Json.encodeToString(
+//                    ErrorResponse(
+//                        details = JsonObject(mapOf("cause" to JsonPrimitive("Bearer token does not match."))),
+//                        message = "Internal Error"
+//                    )
+//                )
+//            )
+//        return
+//    }
+//    ctx.next()
 }
 
 private fun versionCheckHandler(ctx: RoutingContext) {

@@ -1,55 +1,9 @@
 package io.hasura.postgres.cli
 
-import io.hasura.common.*
-import io.hasura.postgres.PGColumnType
+import io.hasura.common.ConnectionUri
 import kotlinx.cli.*
-import org.jooq.impl.DSL
 import java.io.File
 import kotlin.system.exitProcess
-
-interface IConfigGenerator<T : Configuration, U : ColumnType> {
-    fun generateConfig(config: T): DefaultConfiguration<U>
-}
-
-data class PostgresConfig(
-    override val connectionUri: ConnectionUri,
-) : Configuration
-
-object PostgresConfigGenerator : IConfigGenerator<PostgresConfig, PGColumnType> {
-    override fun generateConfig(config: PostgresConfig): DefaultConfiguration<PGColumnType> {
-        val ctx = DSL.using(config.connectionUri.resolve())
-
-        val tables = ctx.meta()
-            .filterSchemas { it.name == "public" }
-            .tables
-            .map {
-                TableInfo(
-                    name = it.name,
-                    description = it.comment,
-                    category = Category.TABLE,
-                    columns = it.fields().map { field ->
-                        Column(
-                            name = field.name,
-                            description = field.comment,
-                            type = PGColumnType(
-                                typeName = field.dataType.typeName,
-                            ),
-                            nullable = field.dataType.nullable(),
-                            autoIncrement = field.dataType.identity(),
-                            isPrimaryKey = it.references.any { ref -> ref.fields.contains(field) },
-                        )
-                    },
-                    primaryKeys = it.primaryKey?.fields?.map { it.name } ?: emptyList(),
-                    foreignKeys = emptyMap()
-                )
-            }
-
-        return DefaultConfiguration(
-            connectionUri = config.connectionUri,
-            tables = tables,
-        )
-    }
-}
 
 
 @OptIn(ExperimentalCli::class)
