@@ -29,6 +29,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.slf4j.LoggerFactory
@@ -203,7 +204,7 @@ suspend fun <Configuration, State> startServer(
             if (connector is ExperimentalSQLConnector<*>) {
                 println("SQL endpoint enabled")
                 router.post("/sql").coHandler { ctx ->
-                    ctx.handleJsonRequest<SQLRequest, QueryResponse>("sql") { request ->
+                    ctx.handleJsonRequest<SQLRequest, JsonArray>("sql") { request ->
                         connector.experimentalSQL(
                             configuration as DefaultConfiguration<out ColumnType>,
                             state as DefaultState<out ColumnType>,
