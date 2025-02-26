@@ -30,6 +30,10 @@ abstract class DefaultSchemaGeneratorClass<T : ColumnType> : ISchemaGenerator<De
         columnType: T,
     ): DataType<out Any>
 
+    abstract fun mapColumnDataTypeToSQLDataTypeWDefault(
+        columnType: T?,
+    ): DataType<out Any>
+
     abstract fun mapAggregateFunctions(
         columnType: T,
         representation: TypeRepresentation?
@@ -106,6 +110,15 @@ abstract class DefaultSchemaGenerator<T : ColumnType> : DefaultSchemaGeneratorCl
         return scalarTypes.associate { (columnType, representation) ->
             columnType to representation
         }
+    }
+
+    override fun mapColumnDataTypeToSQLDataTypeWDefault(
+        columnType: T?,
+    ): DataType<out Any> {
+      if (columnType == null) {
+        return SQLDataType.CLOB
+      }
+      return mapColumnDataTypeToSQLDataType(columnType)
     }
 
     override fun generateScalarName(columnType: T): String {

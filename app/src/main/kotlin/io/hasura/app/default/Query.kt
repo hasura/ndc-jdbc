@@ -136,12 +136,7 @@ class DefaultQuery<T : ColumnType>(
 
     private fun getDatabaseDialect(type: DatabaseSource): Pair<SQLDialect, Settings> = when (type) {
         DatabaseSource.BIGQUERY -> SQLDialect.BIGQUERY to Settings()
-
-        DatabaseSource.DATABRICKS -> SQLDialect.MYSQL to Settings()
-            .withRenderFormatted(true)
-            .withRenderQuotedNames(RenderQuotedNames.EXPLICIT_DEFAULT_UNQUOTED)
-            .withRenderNameCase(RenderNameCase.AS_IS)
-
+        DatabaseSource.DATABRICKS -> SQLDialect.DATABRICKS to Settings()
         DatabaseSource.REDSHIFT -> SQLDialect.REDSHIFT to Settings()
         DatabaseSource.SNOWFLAKE -> SQLDialect.SNOWFLAKE to Settings()
     }
@@ -167,11 +162,12 @@ class DefaultQuery<T : ColumnType>(
     private fun handleBinaryComparison(expr: Expression.BinaryComparisonOperator, table: Table<*>? = null): Condition {
         val fieldName = getColumnName(expr.column)
         val field = if (table != null) field(name(table.name, fieldName)) else field(name(fieldName))
+        val columnType = lookupColumnType(request.collection, fieldName)
 
         return when (val value = expr.value) {
             is ComparisonValue.Scalar -> handleScalarComparison(field, expr.operator, value)
             is ComparisonValue.Column -> handleColumnComparison(field, expr.operator, value)
-            is ComparisonValue.Variable -> handleVariableComparison(field, expr.operator, value)
+            is ComparisonValue.Variable -> handleVariableComparison(field, expr.operator, value, columnType)
         }
     }
 
@@ -231,14 +227,26 @@ class DefaultQuery<T : ColumnType>(
     private fun handleVariableComparison(
         field: JooqField<Any>,
         operator: String,
-        value: ComparisonValue.Variable
+        value: ComparisonValue.Variable,
+        columnType: T?
     ): Condition {
         return when (request.variables?.isNotEmpty() == true) {
             true -> {
+                val variable = request.variables!!.first()
+                val variableType = variable[value.name]?.toString()?.removeSurrounding("\"")?.javaClass
+                val valueType = schemaGenerator.mapColumnDataTypeToSQLDataTypeWDefault(columnType)
                 val varField = field(name(variablesCTEName, cleanVariableName(value.name)))
+                val castField = if (variableType == valueType) varField else {
+                    cast(varField, valueType)
+                } as JooqField<Any>
                 when (operator) {
-                    "_like", "_ilike" -> handleBasicComparison(field, operator, varField)
-                    else -> handleBasicComparison(field, operator, varField)
+                    "_like", "_ilike", "_nlike", "_nilike" -> handleLikeComparison(
+                        field,
+                        castField,
+                        operator.startsWith("_n"),
+                        operator.contains("i")
+                    )
+                    else -> handleBasicComparison(field, operator, castField)
                 }
             }
             false -> field.eq(value.name)
@@ -582,32 +590,31 @@ class DefaultQuery<T : ColumnType>(
             is FieldOrAggregate.FieldType -> {
                 when (val f = field.field) {
                     is Field.Column -> {
-                        val table = configuration.tables.find { it.name == collection }
-                            ?: error("Table $collection not found in connector configuration")
-
-                        val column = table.columns.find { it.name == f.column }
-                            ?: error("Column ${f.column} not found in table $collection")
-
-                        return column.type
+                        return lookupColumnType(collection, f.column)
                     }
                     else -> throw ConnectorError.NotSupported("Unsupported: Relationships are not supported")
                 }
             }
             is FieldOrAggregate.AggregateType -> {
-                val table = configuration.tables.find { it.name == collection }
-                    ?: error("Table $collection not found in connector configuration")
                 when (val f = field.aggregate) {
                     is Aggregate.StarCount -> return null
                     is Aggregate.SingleColumn -> {
-                        val column = table.columns.find { it.name == f.column }
-                            ?: error("Column ${f.column} not found in table $collection")
-
-                        return column.type
+                        return lookupColumnType(collection, f.column)
                     }
                     is Aggregate.ColumnCount -> return null
                 }
             }
         }
+    }
+
+    private fun lookupColumnType(collection: String, col: String): T? {
+        val table = configuration.tables.find { it.name == collection }
+            ?: error("Table $collection not found in connector configuration")
+
+        val column = table.columns.find { it.name == col }
+            ?: error("Column ${col} not found in table $collection")
+
+        return column.type
     }
 
     private fun cleanVariableName(name: String): String {

@@ -95,11 +95,46 @@ class DatabricksSchemaGenerator : DefaultSchemaGenerator<DatabricksDataType>() {
                 }
             }
             DatabricksDataType.BIGINT -> cast(field, SQLDataType.VARCHAR(255))
-            is DatabricksDataType.ARRAY -> cast(field, SQLDataType.JSON)
-            is DatabricksDataType.MAP -> cast(field, SQLDataType.JSON)
-            is DatabricksDataType.STRUCT -> cast(field, SQLDataType.JSON)
-            DatabricksDataType.VARIANT -> cast(field, SQLDataType.JSON)
             else -> field
+        }
+    }
+
+    private fun getSupportedAggregateFunctions(columnType: DatabricksDataType): List<String> {
+        val numericFunctions = listOf(
+            "avg", "sum", "min", "max",
+            "stddev_pop", "stddev_samp",
+            "var_pop", "var_samp"
+        )
+
+        return when (columnType) {
+            is DatabricksDataType.DECIMAL,
+            DatabricksDataType.FLOAT,
+            DatabricksDataType.DOUBLE,
+            DatabricksDataType.TINYINT,
+            DatabricksDataType.SMALLINT,
+            DatabricksDataType.INT,
+            DatabricksDataType.BIGINT -> numericFunctions
+
+            DatabricksDataType.BOOLEAN,
+            DatabricksDataType.DATE,
+            DatabricksDataType.STRING,
+            DatabricksDataType.CHAR,
+            DatabricksDataType.VARCHAR,
+            DatabricksDataType.TIMESTAMP,
+            DatabricksDataType.TIMESTAMP_NTZ -> listOf("min", "max")
+
+            else -> emptyList()
+        }
+    }
+
+    override fun mapAggregateFunctions(
+        columnType: DatabricksDataType,
+        representation: TypeRepresentation?
+    ): Map<String, AggregateFunctionDefinition> {
+        return getSupportedAggregateFunctions(columnType).associateWith { _ ->
+            AggregateFunctionDefinition(
+                resultType = Type.Named(name = columnType.typeName)
+            )
         }
     }
 
