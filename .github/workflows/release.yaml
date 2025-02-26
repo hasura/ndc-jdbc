@@ -51,19 +51,19 @@ jobs:
       #       SOURCE=${{ steps.version.outputs.connector }}
       #       JOOQ_PRO_EMAIL=${{ secrets.JOOQ_PRO_EMAIL }}
       #       JOOQ_PRO_LICENSE=${{ secrets.JOOQ_PRO_LICENSE }}
-
-      - name: Build and push CLI docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile.cli
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ghcr.io/hasura/ndc-${{ steps.version.outputs.connector }}-jdbc-cli:v${{ steps.version.outputs.version }}
-          build-args: |
-            SOURCE=${{ steps.version.outputs.connector }}
-            JOOQ_PRO_EMAIL=${{ secrets.JOOQ_PRO_EMAIL }}
-            JOOQ_PRO_LICENSE=${{ secrets.JOOQ_PRO_LICENSE }}
+      #
+      # - name: Build and push CLI docker image
+      #   uses: docker/build-push-action@v6
+      #   with:
+      #     context: .
+      #     file: ./Dockerfile.cli
+      #     platforms: linux/amd64,linux/arm64
+      #     push: true
+      #     tags: ghcr.io/hasura/ndc-${{ steps.version.outputs.connector }}-jdbc-cli:v${{ steps.version.outputs.version }}
+      #     build-args: |
+      #       SOURCE=${{ steps.version.outputs.connector }}
+      #       JOOQ_PRO_EMAIL=${{ secrets.JOOQ_PRO_EMAIL }}
+      #       JOOQ_PRO_LICENSE=${{ secrets.JOOQ_PRO_LICENSE }}
 
       - name: Create connector metadata package
         run: |
@@ -71,37 +71,31 @@ jobs:
           mkdir -p .hasura-connector
 
           # Create metadata file with correct version
-          if [ "${{ steps.version.outputs.connector }}" = "bigquery" ]; then
-            cat > .hasura-connector/connector-metadata.yaml << EOF
+          cat > .hasura-connector/connector-metadata.yaml << EOF
           packagingDefinition:
             type: PrebuiltDockerImage
             dockerImage: "ghcr.io/hasura/ndc-${{ steps.version.outputs.connector }}-jdbc:v${{ steps.version.outputs.version }}"
           supportedEnvironmentVariables:
             - name: JDBC_URL
               description: "The JDBC URL to connect to the database"
-          commands:
-            update:
-              type: Dockerized
-              dockerImage: ghcr.io/hasura/ndc-${{ steps.version.outputs.connector }}-jdbc-cli:v${{ steps.version.outputs.version }}
-              commandArgs: [update, --jdbc-url, JDBC_URL, --outfile, /etc/connector/configuration.json]
           EOF
-          else
-            cat > .hasura-connector/connector-metadata.yaml << EOF
-          packagingDefinition:
-            type: PrebuiltDockerImage
-            dockerImage: "ghcr.io/hasura/ndc-${{ steps.version.outputs.connector }}-jdbc:v${{ steps.version.outputs.version }}"
-          supportedEnvironmentVariables:
-            - name: JDBC_URL
-              description: "The JDBC URL to connect to the database"
+
+          # Add JDBC_SCHEMAS for non-BigQuery connectors
+          if [ "${{ steps.version.outputs.connector }}" != "bigquery" ]; then
+            cat >> .hasura-connector/connector-metadata.yaml << EOF
             - name: JDBC_SCHEMAS
               description: "A comma-separated list of schemas to include in the metadata"
+          EOF
+          fi
+
+          # Add update command
+          cat >> .hasura-connector/connector-metadata.yaml << EOF
           commands:
             update:
               type: Dockerized
               dockerImage: ghcr.io/hasura/ndc-${{ steps.version.outputs.connector }}-jdbc-cli:v${{ steps.version.outputs.version }}
-              commandArgs: [update, --jdbc-url, JDBC_URL, --schemas, \$JDBC_SCHEMAS, --outfile, /etc/connector/configuration.json]
+              commandArgs: [update, --jdbc-url, JDBC_URL$([ "${{ steps.version.outputs.connector }}" != "bigquery" ] && echo ", --schemas, \$JDBC_SCHEMAS"), --outfile, /etc/connector/configuration.json]
           EOF
-          fi
 
           # Create tarball
           tar -czf ${{ steps.version.outputs.connector }}-connector-v${{ steps.version.outputs.version }}.tar.gz .hasura-connector/
