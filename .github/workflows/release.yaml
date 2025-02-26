@@ -3,7 +3,9 @@ name: Release Connector
 on:
   push:
     tags:
-      - 'snowflake/v*'
+      - "bigquery/v*"
+      - "databricks/v*"
+      - "snowflake/v*"
 
 jobs:
   release:
@@ -15,8 +17,8 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'temurin'
+          java-version: "21"
+          distribution: "temurin"
 
       - name: Extract connector and version
         id: version
@@ -68,21 +70,36 @@ jobs:
           # Create directory structure
           mkdir -p .hasura-connector
 
+          if [ "${{ steps.version.outputs.connector }}" = "bigquery" ]; then
+            COMMAND_ARGS="[update, --jdbc-url, JDBC_URL, --outfile, /etc/connector/configuration.json]"
+            ENV_VARS=$(cat <<EOF
+            - name: JDBC_URL
+              description: "The JDBC URL to connect to the database"
+            EOF
+            )
+          else
+            COMMAND_ARGS="[update, --jdbc-url, JDBC_URL, --schemas, \$JDBC_SCHEMAS, --outfile, /etc/connector/configuration.json]"
+            ENV_VARS=$(cat <<EOF
+            - name: JDBC_URL
+              description: "The JDBC URL to connect to the database"
+            - name: JDBC_SCHEMAS
+              description: "A comma-separated list of schemas to include in the metadata"
+            EOF
+            )
+          fi
+
           # Create metadata file with correct version
           cat > .hasura-connector/connector-metadata.yaml << EOF
           packagingDefinition:
             type: PrebuiltDockerImage
             dockerImage: "ghcr.io/hasura/ndc-${{ steps.version.outputs.connector }}-jdbc:v${{ steps.version.outputs.version }}"
           supportedEnvironmentVariables:
-            - name: JDBC_URL
-              description: "The JDBC URL to connect to the database"
-            - name: JDBC_SCHEMAS
-              description: "A comma-separated list of schemas to include in the metadata"
+          ${ENV_VARS}
           commands:
             update:
               type: Dockerized
-              dockerImage: ghcr.io/hasura/ndc-${{ steps.version.outputs.connector }}-cli:v${{ steps.version.outputs.version }}
-              commandArgs: [update, --jdbc-url, JDBC_URL, --schemas, \$JDBC_SCHEMAS, --outfile, /etc/connector/configuration.json]
+              dockerImage: ghcr.io/hasura/ndc-${{ steps.version.outputs.connector }}-jdbc-cli:v${{ steps.version.outputs.version }}
+              commandArgs: ${COMMAND_ARGS}
           EOF
 
           # Create tarball
