@@ -34,7 +34,7 @@ dependencies {
     implementation("com.google.protobuf:protobuf-java-util:3.25.5")
 
     // Jooq
-    implementation("org.jooq.pro:jooq:3.19.8")
+    implementation("org.jooq.pro:jooq:3.20.1")
 }
 
 tasks.shadowJar {

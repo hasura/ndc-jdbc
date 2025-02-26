@@ -78,25 +78,36 @@ sealed class DatabricksDataType : ColumnType {
 
     @Serializable
     @SerialName("ARRAY")
-    data class ARRAY(val elementType: DatabricksDataType) : DatabricksDataType()
+    object ARRAY : DatabricksDataType()
 
     @Serializable
     @SerialName("MAP")
-    data class MAP(val keyType: DatabricksDataType, val valueType: DatabricksDataType) : DatabricksDataType()
+    object MAP : DatabricksDataType()
 
     @Serializable
     @SerialName("STRUCT")
-    data class STRUCT(val fields: List<StructField>) : DatabricksDataType()
+    object STRUCT : DatabricksDataType()
 
-    @Serializable
-    @SerialName("STRUCT_FIELD")
-    data class StructField(val name: String, val type: DatabricksDataType)
-
-    override val typeName: String = when (this) {
-        is DECIMAL -> "DECIMAL"
-        is ARRAY -> "ARRAY"
-        is MAP -> "MAP"
-        is STRUCT -> "STRUCT"
-        else -> this::class.simpleName?.uppercase() ?: "UNKNOWN"
-    }
+    override val typeName: String
+        get() = when (this) {
+            is DECIMAL -> {
+                val (precision, scale) = this
+                when {
+                    scale == 0 ->
+                        when {
+                            precision!! <= 2 -> "TINYINT"
+                            precision <= 4 -> "SMALLINT"
+                            precision <= 9 -> "INT"
+                            precision <= 18 -> "BIGINT"
+                            else -> "BIGINT"
+                        }
+                    scale!! > 0 -> "DECIMAL"
+                    else -> "DECIMAL"
+                }
+            }
+            is ARRAY -> "ARRAY"
+            is MAP -> "MAP"
+            is STRUCT -> "STRUCT"
+            else -> this::class.simpleName?.uppercase() ?: "UNKNOWN"
+        }
 }

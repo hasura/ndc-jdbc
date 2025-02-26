@@ -13,6 +13,7 @@ import io.hasura.common.TableInfo
 import io.hasura.ndc.ir.json
 import kotlinx.cli.*
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.json.Json
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
@@ -55,90 +56,116 @@ object DatabricksConfigGenerator : IConfigGenerator<DatabricksConfiguration, Dat
         )
     }
 
+    @Serializable
+    data class QueryTable(
+        val tableSchema: String,
+        val tableName: String,
+        val tableType: String,
+        val description: String? = null,
+        val columns: Map<String, QueryColumn>
+    )
+
+    @Serializable
+    data class QueryColumn(
+        val name: String,
+        val type: String,
+        val nullable: String,
+        val precision: Int? = null,
+        val scale: Int? = null,
+    )
+
     private fun extractCatalog(jdbcUrl: String): String {
         return jdbcUrl.substringAfter("ConnCatalog=").substringBefore(";")
-    }
-
-    private fun includeSchemas(catalog: String, configSchemas: List<String>): (String) -> Boolean {
-        return { schema ->
-            val schemaCatalog = schema.substringBefore(".")
-            when {
-                configSchemas.isEmpty() -> {
-                    schemaCatalog.contains(catalog)
-                    && !schema.contains("information_schema")
-                }
-                else -> {
-                    configSchemas.any {
-                        schemaCatalog.contains(catalog)
-                        && schema.contains(it)
-                        && !schema.contains("information_schema")
-                    }
-                }
-            }
-        }
     }
 
     private fun introspectSchemas(config: DatabricksConfiguration): IntrospectionResult {
         val jdbcUrl = config.connectionUri.resolve()
         val catalog = extractCatalog(jdbcUrl)
+        val ctx = DSL.using(jdbcUrl)
 
-        // Schemacrawler options
-        val options = SchemaCrawlerOptionsBuilder.newSchemaCrawlerOptions()
-            .withLimitOptions(
-                LimitOptionsBuilder.builder()
-                    .tableTypes(null as String?)
-                    .includeSchemas(includeSchemas(catalog, config.schemas))
-                    .toOptions()
+        val sql = """
+            WITH column_data AS (
+                SELECT
+                    c.table_name AS table_name,
+                    c.table_schema AS table_schema,
+                    t.table_type AS table_type,
+                    t.comment AS description,
+                    c.column_name,
+                    TO_JSON(STRUCT(
+                        c.column_name AS name,
+                        c.data_type AS type,
+                        c.is_nullable AS nullable,
+                        c.numeric_precision AS precision,
+                        c.numeric_scale AS scale
+                    )) AS column_info
+                FROM information_schema.columns c
+                JOIN information_schema.tables t
+                ON c.table_schema = t.table_schema AND c.table_name = t.table_name
+                WHERE c.table_schema NOT IN ('information_schema', 'sys')
+                ${if (config.schemas.isNotEmpty()) 
+                    "AND LOWER(c.table_schema) IN (${config.schemas.joinToString(",") { "'${it.lowercase()}'" }})"
+                else ""}
+            ),
+            columns_struct AS (
+                SELECT
+                    table_schema,
+                    table_name,
+                    table_type,
+                    description,
+                    ARRAY_JOIN(
+                        COLLECT_LIST(
+                            CONCAT('"', column_name, '":', column_info)
+                        ), ','
+                    ) AS columns_json
+                FROM column_data
+                GROUP BY table_schema, table_name, table_type, description
             )
-        val results = SchemaCrawlerUtility.getCatalog(
-            DatabaseConnectionSourceBuilder
-                .builder(jdbcUrl)
-                .build(),
-            options
-        )
+            SELECT
+                CONCAT('{', ARRAY_JOIN(COLLECT_LIST(CONCAT(
+                    '"', table_schema, '.', table_name, '": {',
+                        '"tableSchema": "', table_schema, '", ',
+                        '"tableName": "', table_name, '", ',
+                        '"tableType": "', table_type, '", ',
+                        '"description": "', description, '", ',
+                        '"columns": {', columns_json, '}',
+                    '}'
+                )), ','), '}') AS result
+            FROM columns_struct;
+        """
 
-        try {
-            val tables = results.tables.map { table ->
-                TableInfo<DatabricksDataType>(
-                    name = "${catalog}.${table.schema.name}.${table.name}",
-                    category = when (table.tableType.tableType) {
-                        "TABLE" -> Category.TABLE
-                        "VIEW" -> Category.VIEW
-                        "MATERIALIZED VIEW" -> Category.VIEW
-                        else -> throw Exception("Unknown table type: ${table.tableType}")
-                    },
-                    description = table.remarks,
-                    columns = table.columns.map { column ->
-                        Column<DatabricksDataType>(
-                            name = column.name,
-                            type = getDatabricksDataType(
-                                column.columnDataType.name,
-                                column.size,
-                                column.decimalDigits,
-                            ),
-                            nullable = column.isNullable,
-                            autoIncrement = column.isAutoIncremented,
-                            isPrimaryKey = column.isPartOfPrimaryKey
-                        )
-                    },
-                    primaryKeys = emptyList(),
-                    foreignKeys = table.foreignKeys.filter {
-                      table.name != it.primaryKeyTable.name
-                    }.associate { fk ->
-                      fk.name to ForeignKeyInfo(
-                        columnMapping = fk.columnReferences.associate { 
-                          it.primaryKeyColumn.name to it.foreignKeyColumn.name 
-                        },
-                        foreignCollection = fk.referencedTable.name
-                      )
-                    }
-                )
-            }
+        val results = ctx.fetchValue(sql)
+        val json = results?.toString() ?: "{}"
+        val queryTables = jsonFormatter.decodeFromString<Map<String, QueryTable>>(json)
 
-            return IntrospectionResult(tables = tables)
-        } finally {
-            // connection.close()
+        val tables = queryTables.map { (_, table) ->
+            TableInfo<DatabricksDataType>(
+                name = "${catalog}.${table.tableSchema}.${table.tableName}",
+                category = when (table.tableType) {
+                    "TABLE", "MANAGED" -> Category.TABLE
+                    "VIEW" -> Category.VIEW
+                    "MATERIALIZED VIEW" -> Category.VIEW
+                    else -> throw Exception("Unknown table type: ${table.tableType}")
+                },
+                description = null,
+                columns = table.columns.map { (_, column) ->
+                    Column<DatabricksDataType>(
+                        name = column.name,
+                        type = getDatabricksDataType(
+                            column.type,
+                            column.precision,
+                            column.scale,
+                        ),
+                        nullable = column.nullable == "YES",
+                        autoIncrement = false,
+                        isPrimaryKey = false
+                    )
+                },
+                primaryKeys = emptyList(),
+                foreignKeys = emptyMap()
+            )
         }
+
+        return IntrospectionResult(tables = tables)
     }
 
     private fun getDatabricksDataType(
@@ -149,13 +176,18 @@ object DatabricksConfigGenerator : IConfigGenerator<DatabricksConfiguration, Dat
         return when {
             column == "BOOLEAN" -> DatabricksDataType.BOOLEAN
             column == "TINYINT" -> DatabricksDataType.TINYINT
+            column == "BYTE" -> DatabricksDataType.TINYINT
             column == "SMALLINT" -> DatabricksDataType.SMALLINT
+            column == "SHORT" -> DatabricksDataType.SMALLINT
             column == "INT" -> DatabricksDataType.INT
             column == "BIGINT" -> DatabricksDataType.BIGINT
+            column == "LONG" -> DatabricksDataType.BIGINT
             column == "FLOAT" -> DatabricksDataType.FLOAT
             column == "DOUBLE" -> DatabricksDataType.DOUBLE
             column == "DECIMAL" -> DatabricksDataType.DECIMAL(precision, scale)
+            column == "NUMBER" -> DatabricksDataType.DECIMAL(precision, scale)
             column == "STRING" -> DatabricksDataType.STRING
+            column == "TEXT" -> DatabricksDataType.STRING
             column == "CHAR" -> DatabricksDataType.CHAR
             column == "VARCHAR" -> DatabricksDataType.VARCHAR
             column == "BINARY" -> DatabricksDataType.BINARY
@@ -163,26 +195,9 @@ object DatabricksConfigGenerator : IConfigGenerator<DatabricksConfiguration, Dat
             column == "TIMESTAMP" -> DatabricksDataType.TIMESTAMP
             column == "TIMESTAMP_NTZ" -> DatabricksDataType.TIMESTAMP_NTZ
             column == "VARIANT" -> DatabricksDataType.VARIANT
-            column.contains("ARRAY") -> {
-              val type = column.substringAfter("<").substringBefore(">")
-              DatabricksDataType.ARRAY(getDatabricksDataType(type, null, null))
-            }
-            column.contains("MAP") -> {
-              val keyType = column.substringAfter("<").substringBefore(",").trim()
-              val valueType = column.substringAfter(",").substringBefore(">").trim()
-              DatabricksDataType.MAP(
-                getDatabricksDataType(keyType, null, null),
-                getDatabricksDataType(valueType, null, null)
-              )
-            }
-            column.contains("STRUCT") -> {
-              val fields = column.substringAfter("<").substringBefore(">").split(",").map { field ->
-                val fieldName = field.substringBefore(":").trim()
-                val fieldType = field.substringAfter(":").trim()
-                DatabricksDataType.StructField(fieldName, getDatabricksDataType(fieldType, null, null))
-              }
-              DatabricksDataType.STRUCT(fields)
-            }
+            column.contains("ARRAY") -> DatabricksDataType.ARRAY
+            column.contains("MAP") -> DatabricksDataType.MAP
+            column.contains("STRUCT") -> DatabricksDataType.STRUCT
             else -> DatabricksDataType.VARIANT
         }
     }

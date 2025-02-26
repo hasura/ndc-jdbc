@@ -19,7 +19,7 @@ dependencies {
     implementation(libs.databricks.jdbc) 
 
     // Jooq
-    implementation("org.jooq.pro:jooq:3.19.8")
+    implementation("org.jooq.pro:jooq:3.20.1")
 }
 
 tasks.shadowJar {
@@ -41,5 +41,6 @@ tasks.withType<Zip>().configureEach {
 }
 
 application {
+    applicationDefaultJvmArgs = listOf("--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED")
     mainClass.set("io.hasura.databricks.cli.MainKt")
 }

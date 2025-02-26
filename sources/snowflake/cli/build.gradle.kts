@@ -15,7 +15,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.snowflake.jdbc)
-    implementation("org.jooq.pro:jooq:3.19.8")
+    implementation("org.jooq.pro:jooq:3.20.1")
 }
 
 tasks.shadowJar {

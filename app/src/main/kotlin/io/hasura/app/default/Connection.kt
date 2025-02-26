@@ -22,7 +22,7 @@ class DefaultConnection(
             val metaData = results.metaData
             val columnCount = metaData.columnCount
 
-            Telemetry.withActiveSpan("processResults") { span ->
+            Telemetry.withActiveSpan("processResults") { _ ->
                 // Iterate over all rows
                 while (results.next()) {
                     val row = mutableMapOf<String, JsonElement>()
@@ -31,13 +31,19 @@ class DefaultConnection(
                     for (columnIndex in 1..columnCount) {
                         val columnName = metaData.getColumnName(columnIndex)
                         val value = results.getObject(columnIndex)
-                        // Convert the value to JsonElement
+
                         row[columnName] = when (value) {
                             null -> JsonNull
-                            is String -> JsonPrimitive(value)
+                            is String -> {
+                              if (value.startsWith("{") || value.startsWith("[")) {
+                                parseStringToJsonElement(value)
+                              } else {
+                                JsonPrimitive(value)
+                              }
+                            }
                             is Number -> JsonPrimitive(value)
                             is Boolean -> JsonPrimitive(value)
-                            else -> JsonPrimitive(value.toString())
+                            else -> parseStringToJsonElement(value.toString())
                         }
                     }
 
@@ -49,6 +55,14 @@ class DefaultConnection(
             }
 
             rows // Last expression in the lambda is the return value
+        }
+    }
+
+    private fun parseStringToJsonElement(value: String): JsonElement {
+        return try {
+            Json.parseToJsonElement(value)
+        } catch (e: Exception) {
+            JsonPrimitive(value)
         }
     }
 }

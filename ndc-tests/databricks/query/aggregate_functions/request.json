@@ -24,31 +24,6 @@
         "type": "single_column",
         "column": "InvoiceId",
         "function": "max"
-      },
-      "sum_total": {
-        "type": "single_column",
-        "column": "Total",
-        "function": "sum"
-      },
-      "stddev_pop_total": {
-        "type": "single_column",
-        "column": "Total",
-        "function": "stddev_pop"
-      },
-      "stddev_samp_total": {
-        "type": "single_column",
-        "column": "Total",
-        "function": "stddev_samp"
-      },
-      "var_pop_total": {
-        "type": "single_column",
-        "column": "Total",
-        "function": "var_pop"
-      },
-      "var_samp_total": {
-        "type": "single_column",
-        "column": "Total",
-        "function": "var_samp"
       }
     }
   },
