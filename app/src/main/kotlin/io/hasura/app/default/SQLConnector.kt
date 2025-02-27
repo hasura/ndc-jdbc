@@ -1,18 +1,16 @@
-package io.hasura.postgres.app
+package io.hasura.snowflake.app
 
-import io.hasura.app.base.DatabaseConnection
-import io.hasura.app.base.DatabaseSource
-import io.hasura.app.default.DefaultConnector
-import io.hasura.app.default.DefaultSchemaGeneratorClass
-import io.hasura.app.default.DefaultState
-import io.hasura.common.ColumnType
-import io.hasura.common.DefaultConfiguration
+import io.hasura.app.base.*
+import io.hasura.app.default.*
+import io.hasura.common.*
+import io.hasura.ndc.connector.ConnectorLogger
+import io.hasura.ndc.ir.*
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.*
 import org.jooq.SQLDialect
 import org.jooq.impl.DSL
 
-class ExperimentalSQLConnector<T : ColumnType>(
+class SQLConnector<T : ColumnType>(
     private val source: DatabaseSource,
     private val connection: (DefaultConfiguration<T>) -> DatabaseConnection,
     private val schemaGenerator: DefaultSchemaGeneratorClass<T>,
@@ -23,19 +21,20 @@ class ExperimentalSQLConnector<T : ColumnType>(
     schemaGenerator = schemaGenerator,
     configSerializer = configSerializer
 ) {
-
-    fun experimentalSQL(
-        configuration: DefaultConfiguration<out ColumnType>,
-        state: DefaultState<out ColumnType>,
-        sqlRequest: SQLRequest
+    override suspend fun sql(
+        configuration: DefaultConfiguration<T>,
+        state: DefaultState<T>,
+        request: SQLRequest
     ): JsonArray {
         return state.client.getConnection().use { connection ->
             val dslContext = DSL.using(connection)
 
-            val stmt = DSL.using(SQLDialect.DEFAULT).parser().parseResultQuery(sqlRequest.sql)
+            val stmt = DSL.using(SQLDialect.DEFAULT)
+                .parser()
+                .parseResultQuery(request.sql)
 
-            dslContext.renderInlined(stmt)
-            println("Postgres SQL: $stmt")
+            val statement = dslContext.renderInlined(stmt)
+            ConnectorLogger.logger.debug("SQL: $statement")
 
             val result = dslContext.fetch(stmt).intoMaps()
             result.toJsonArray()
@@ -73,5 +72,5 @@ class ExperimentalSQLConnector<T : ColumnType>(
             }
         }
     }
-
 }
+

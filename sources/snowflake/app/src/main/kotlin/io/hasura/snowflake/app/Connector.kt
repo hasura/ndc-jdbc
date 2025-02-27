@@ -7,7 +7,7 @@ import io.hasura.ndc.connector.*
 import io.hasura.snowflake.common.SnowflakeDataType
 
 object SnowflakeConnector : ConnectorBuilder<DefaultConfiguration<SnowflakeDataType>, DefaultState<SnowflakeDataType>> {
-    override fun createConnector() = ExperimentalSQLConnector(
+    override fun createConnector() = SQLConnector(
         source = DatabaseSource.SNOWFLAKE,
         connection = { config -> SnowflakeConnection(config) },
         schemaGenerator = SnowflakeSchemaGenerator(),
