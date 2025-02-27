@@ -98,7 +98,7 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
-    depends-on:
+    needs:
       - build-cli
       - build-connector
     steps:
