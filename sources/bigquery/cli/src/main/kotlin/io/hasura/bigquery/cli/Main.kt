@@ -88,8 +88,32 @@ object BigQueryConfigGenerator : IConfigGenerator<BigQueryConfiguration, BigQuer
         )
     }
 
+    private fun checkProjectAndDataset(jdbcUrl: String): Pair<String?, String?> {
+        val project = jdbcUrl.takeIf { it.contains("ProjectId=") }
+            ?.substringAfter("ProjectId=")
+            ?.substringBefore(";")
+        val dataset = jdbcUrl.takeIf { it.contains("DefaultDataset=") }
+            ?.substringAfter("DefaultDataset=")
+            ?.substringBefore(";")
+
+        return Pair(project, dataset)
+    }
+
     private fun introspectSchemas(config: BigQueryConfiguration): IntrospectionResult {
         val jdbcUrl = config.connectionUri.resolve()
+        val (project, dataset) = checkProjectAndDataset(jdbcUrl)
+
+        println("Project: $project")
+        println("Dataset: $dataset")
+
+        if (project == null) {
+            throw IllegalArgumentException("ProjectId not found in connection string, but is required")
+        }
+
+        if (dataset == null) {
+            throw IllegalArgumentException("DefaultDataset not found in connection string, but is required")
+        }
+
         val ctx = DSL.using(jdbcUrl)
 
         //language=bigquery
