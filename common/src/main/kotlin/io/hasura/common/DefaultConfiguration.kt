@@ -1,4 +1,3 @@
-
 package io.hasura.common
 
 import kotlinx.serialization.SerialName

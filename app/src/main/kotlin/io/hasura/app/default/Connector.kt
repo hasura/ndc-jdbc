@@ -16,7 +16,7 @@ class DefaultState<T : ColumnType>(
     val client: DatabaseConnection
 )
 
-class DefaultConnector<T : ColumnType>(
+open class DefaultConnector<T : ColumnType>(
     private val source: DatabaseSource,
     private val connection: (DefaultConfiguration<T>) -> DatabaseConnection,
     private val schemaGenerator: DefaultSchemaGeneratorClass<T>,
@@ -175,5 +175,13 @@ class DefaultConnector<T : ColumnType>(
         request: MutationRequest
     ): MutationResponse {
         throw UnsupportedOperationException("Mutation is not supported")
+    }
+
+    override suspend fun sql(
+        configuration: DefaultConfiguration<T>,
+        state: DefaultState<T>,
+        request: SQLRequest
+    ): JsonArray {
+        throw UnsupportedOperationException("SQL is not supported")
     }
 }
