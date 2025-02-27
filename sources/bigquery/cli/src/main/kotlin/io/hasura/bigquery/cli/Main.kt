@@ -103,9 +103,6 @@ object BigQueryConfigGenerator : IConfigGenerator<BigQueryConfiguration, BigQuer
         val jdbcUrl = config.connectionUri.resolve()
         val (project, dataset) = checkProjectAndDataset(jdbcUrl)
 
-        println("Project: $project")
-        println("Dataset: $dataset")
-
         if (project == null) {
             throw IllegalArgumentException("ProjectId not found in connection string, but is required")
         }
@@ -115,8 +112,6 @@ object BigQueryConfigGenerator : IConfigGenerator<BigQueryConfiguration, BigQuer
         }
 
         val ctx = DSL.using(jdbcUrl)
-
-        //language=bigquery
         val sql = """
             WITH column_data AS (
               SELECT
