@@ -33,7 +33,6 @@ enum class Category {
     MATERIALIZED_VIEW
 }
 
-
 interface ColumnType {
     val typeName: String
 }

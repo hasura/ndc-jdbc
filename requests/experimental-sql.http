@@ -1,6 +1,0 @@
-POST http://localhost:8081/sql
-Content-Type: application/json
-
-{
-  "sql": "SELECT ALBUMID, TITLE FROM CHINOOK.PUBLIC.ALBUM WHERE ALBUMID = 1"
-}
