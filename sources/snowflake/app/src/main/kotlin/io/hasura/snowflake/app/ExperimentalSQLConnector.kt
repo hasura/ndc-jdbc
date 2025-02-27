@@ -44,10 +44,11 @@ class ExperimentalSQLConnector<T : ColumnType>(
         }
     }
 
-    fun Map<String, Any>.toJsonObject(): JsonObject {
+    fun Map<String, Any?>.toJsonObject(): JsonObject {
         return buildJsonObject {
             this@toJsonObject.forEach { (key, value) ->
                 when (value) {
+                    null -> put(key, JsonNull)
                     is String -> put(key, value)
                     is Number -> put(key, value)
                     is Boolean -> put(key, value)
@@ -59,10 +60,11 @@ class ExperimentalSQLConnector<T : ColumnType>(
         }
     }
 
-    fun List<Any>.toJsonArray(): JsonArray {
+    fun List<Any?>.toJsonArray(): JsonArray {
         return buildJsonArray {
             this@toJsonArray.forEach { item ->
                 when (item) {
+                    null -> add(JsonNull)
                     is String -> add(item)
                     is Number -> add(item)
                     is Boolean -> add(item)
