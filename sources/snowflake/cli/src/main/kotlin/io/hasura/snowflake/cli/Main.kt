@@ -1,20 +1,11 @@
 package io.hasura.snowflake.cli
 
-import io.hasura.common.Category
-import io.hasura.common.Column
-import io.hasura.common.ColumnType
-import io.hasura.common.Configuration
-import io.hasura.common.ConnectionUri
-import io.hasura.common.DefaultConfiguration
-import io.hasura.common.ForeignKeyInfo
-import io.hasura.common.FunctionInfo
-import io.hasura.common.TableInfo
+import io.hasura.common.*
 import io.hasura.ndc.ir.json
 import io.hasura.snowflake.common.SnowflakeDataType
 import kotlinx.cli.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import kotlin.system.exitProcess
 
@@ -24,7 +15,8 @@ interface IConfigGenerator<T : Configuration, U : ColumnType> {
 
 data class SnowflakeConfiguration(
     override val connectionUri: ConnectionUri,
-    val schemas: List<String> = emptyList()
+    val schemas: List<String> = emptyList(),
+    val fullyQualifyTableNames: Boolean = false
 ) : Configuration
 
 
@@ -70,10 +62,22 @@ object SnowflakeConfigGenerator : IConfigGenerator<SnowflakeConfiguration, Snowf
         ctx.fetch("SHOW PRIMARY KEYS IN DATABASE $database")
         ctx.fetch("SHOW IMPORTED KEYS IN DATABASE $database")
 
+        val tableNameSQL = if (config.fullyQualifyTableNames) {
+            "array_construct(tables.TABLE_DATABASE, tables.TABLE_SCHEMA, tables.TABLE_NAME)"
+        } else {
+            "array_construct(tables.TABLE_NAME)"
+        }
+
+        val fkeySQL = if (config.fullyQualifyTableNames) {
+            """array_construct(foreign_keys."pk_database_name", foreign_keys."pk_schema_name", foreign_keys."pk_table_name")"""
+        } else {
+            """array_construct(foreign_keys."pk_table_name")"""
+        }
+
         //language=Snowflake
         val sql = """
         SELECT
-            array_construct(tables.TABLE_DATABASE, tables.TABLE_SCHEMA, tables.TABLE_NAME) AS TABLE_NAME,
+            $tableNameSQL AS TABLE_NAME,
             tables.TABLE_TYPE,
             tables.COMMENT as DESCRIPTION,
             cols.COLUMNS,
@@ -130,7 +134,7 @@ object SnowflakeConfigGenerator : IConfigGenerator<SnowflakeConfiguration, Snowf
                     foreign_keys."fk_table_name",
                     foreign_keys."fk_name",
                     object_construct(
-                        'foreign_collection', array_construct(foreign_keys."pk_database_name", foreign_keys."pk_schema_name", foreign_keys."pk_table_name"),
+                        'foreign_collection', $fkeySQL,
                         'column_mapping', object_agg(foreign_keys."fk_column_name", to_variant(foreign_keys."pk_column_name"))
                     ) AS "constraint"
                 FROM table(RESULT_SCAN(LAST_QUERY_ID(-1))) AS foreign_keys
@@ -190,6 +194,13 @@ class UpdateCommand : Subcommand("update", "Update configuration file") {
         description = "Comma-separated list of schemas to introspect"
     )
 
+    private val fullyQualifyTableNames by option(
+        ArgType.Boolean,
+        shortName = "f",
+        fullName = "fully-qualify-table-names",
+        description = "Whether to fully qualify table names in the configuration",
+    ).default(false)
+
     private val outfile by option(
         ArgType.String,
         shortName = "o",
@@ -206,7 +217,7 @@ class UpdateCommand : Subcommand("update", "Update configuration file") {
 
         // If schemas is empty string or null do empty list
         val cleanedSchemas = schemas?.takeIf { it.isNotEmpty() }?.split(",") ?: emptyList()
-        val config = SnowflakeConfiguration(connectionUri, cleanedSchemas)
+        val config = SnowflakeConfiguration(connectionUri, cleanedSchemas, fullyQualifyTableNames)
         val generatedConfig = SnowflakeConfigGenerator.generateConfig(config)
 
         // Use the shared Json formatter

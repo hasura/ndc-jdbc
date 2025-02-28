@@ -69,7 +69,7 @@ run-snowflake-introspection:
 ifndef JDBC_URL
 	$(error JDBC_URL environment variable is not set)
 endif
-	./gradlew ':sources:snowflake:cli:run' --args="update --jdbc-url JDBC_URL --outfile ../../../configs/snowflake/configuration.json"
+	./gradlew ':sources:snowflake:cli:run' --args="update --jdbc-url JDBC_URL --fully-qualify-table-names --outfile ../../../configs/snowflake/configuration.json"
 
 run-bigquery-introspection:
 ifndef JDBC_URL

@@ -29,15 +29,24 @@ class SQLConnector<T : ColumnType>(
         return state.client.getConnection().use { connection ->
             val dslContext = DSL.using(connection)
 
+            val fixedSql = fixQuotesForFullyQualifiedTableNames(request.sql)
             val stmt = DSL.using(SQLDialect.DEFAULT)
                 .parser()
-                .parseResultQuery(request.sql)
+                .parseResultQuery(fixedSql)
 
             val statement = dslContext.renderInlined(stmt)
             ConnectorLogger.logger.debug("SQL: $statement")
 
             val result = dslContext.fetch(stmt).intoMaps()
             result.toJsonArray()
+        }
+    }
+
+    // Replace "DB.SCHEMA.TABLE" with "DB"."SCHEMA"."TABLE"
+    private fun fixQuotesForFullyQualifiedTableNames(sql: String): String {
+        return sql.replace(Regex("\"?([a-zA-Z0-9_]+)\\.([a-zA-Z0-9_]+)\\.([a-zA-Z0-9_]+)\"?")) {
+            val (db, schema, table) = it.destructured
+            "\"$db\".\"$schema\".\"$table\""
         }
     }
 
