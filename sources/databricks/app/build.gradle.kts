@@ -38,8 +38,6 @@ tasks.withType<Zip>().configureEach {
 }
 
 application {
+    applicationDefaultJvmArgs = listOf("--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED")
     mainClass.set("io.hasura.databricks.app.MainKt")
-    applicationDefaultJvmArgs = listOf(
-        "--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED"
-    )
 }

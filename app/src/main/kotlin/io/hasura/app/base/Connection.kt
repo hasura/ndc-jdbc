@@ -24,7 +24,7 @@ abstract class BaseHikariConnection(protected val config: Configuration) : Datab
     private val dataSource: HikariDataSource by lazy {
         try {
             val driver = getDriverConfig()
-            
+
             HikariDataSource(createBaseHikariConfig(driver.className).apply {
                 driver.configure(this)
             }).also {
