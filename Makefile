@@ -83,6 +83,12 @@ ifndef JDBC_URL
 endif
 	./gradlew ':sources:databricks:cli:run' --args="update --jdbc-url JDBC_URL --outfile ../../../configs/databricks/configuration.json"
 
+run-phoenix-introspection:
+ifndef JDBC_URL
+    $(error JDBC_URL environment variable is not set)
+endif
+	./gradlew ':sources:phoenix:cli:run' --args="update --jdbc-url JDBC_URL --outfile ../../../configs/phoenix/configuration.json"
+
 run-bigquery:
 	OTEL_SERVICE_NAME=ndc-bigquery \
 	HASURA_LOG_LEVEL=debug \
