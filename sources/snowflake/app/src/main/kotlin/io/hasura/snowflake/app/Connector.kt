@@ -2,7 +2,7 @@ package io.hasura.snowflake.app
 
 import io.hasura.app.base.*
 import io.hasura.app.default.*
-import io.hasura.common.*
+import io.hasura.common.configuration.*
 import io.hasura.ndc.connector.*
 import io.hasura.snowflake.common.SnowflakeDataType
 

@@ -4,7 +4,7 @@ import io.hasura.app.base.*
 import io.hasura.app.default.*
 import io.hasura.ndc.ir.*
 import io.hasura.ndc.ir.Type
-import io.hasura.common.*
+import io.hasura.common.configuration.*
 import io.hasura.databricks.common.DatabricksDataType
 import org.jooq.impl.DSL.*
 import org.jooq.Field as JooqField
@@ -49,7 +49,7 @@ class DatabricksSchemaGenerator : DefaultSchemaGenerator<DatabricksDataType>() {
             DatabricksDataType.TIMESTAMP_NTZ -> RepresentationType.Timestamptz
             DatabricksDataType.VARIANT -> RepresentationType.JSON
         }
-        
+
         return createScalarType(representationType, columnType)
     }
 
@@ -89,7 +89,7 @@ class DatabricksSchemaGenerator : DefaultSchemaGenerator<DatabricksDataType>() {
                 when {
                     scale == 0 && precision!! > 18 ->
                         cast(field, SQLDataType.VARCHAR(255))
-                    scale!! > 0 && precision!! > 15 -> 
+                    scale!! > 0 && precision!! > 15 ->
                         cast(field, SQLDataType.VARCHAR(255))
                     else -> field
                 }
@@ -150,7 +150,7 @@ class DatabricksSchemaGenerator : DefaultSchemaGenerator<DatabricksDataType>() {
             DatabricksDataType.STRING,
             DatabricksDataType.CHAR,
             DatabricksDataType.VARCHAR -> baseOperators + comparisonOperators + textOperators
-            
+
             is DatabricksDataType.DECIMAL,
             DatabricksDataType.BIGINT,
             DatabricksDataType.INT,
@@ -158,11 +158,11 @@ class DatabricksSchemaGenerator : DefaultSchemaGenerator<DatabricksDataType>() {
             DatabricksDataType.TINYINT,
             DatabricksDataType.FLOAT,
             DatabricksDataType.DOUBLE -> baseOperators + comparisonOperators
-            
+
             DatabricksDataType.DATE,
             DatabricksDataType.TIMESTAMP,
             DatabricksDataType.TIMESTAMP_NTZ -> baseOperators + comparisonOperators
-            
+
             DatabricksDataType.BOOLEAN,
             is DatabricksDataType.ARRAY,
             is DatabricksDataType.MAP,

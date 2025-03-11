@@ -2,7 +2,7 @@ package io.hasura.app.default
 
 import io.hasura.app.base.*
 import io.hasura.ndc.ir.*
-import io.hasura.common.*
+import io.hasura.common.configuration.*
 import org.jooq.DataType
 import org.jooq.Field as JooqField
 import org.jooq.impl.SQLDataType

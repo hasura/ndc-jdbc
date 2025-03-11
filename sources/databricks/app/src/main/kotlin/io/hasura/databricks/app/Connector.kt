@@ -3,7 +3,7 @@ package io.hasura.databricks.app
 import io.hasura.app.base.*
 import io.hasura.app.default.*
 import io.hasura.ndc.connector.*
-import io.hasura.common.*
+import io.hasura.common.configuration.*
 import io.hasura.databricks.common.DatabricksDataType
 
 object DatabricksConnector : ConnectorBuilder<DefaultConfiguration<DatabricksDataType>, DefaultState<DatabricksDataType>> {

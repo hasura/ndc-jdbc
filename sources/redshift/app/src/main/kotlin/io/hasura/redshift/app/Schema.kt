@@ -3,7 +3,7 @@ package io.hasura.redshift.app
 import io.hasura.app.base.*
 import io.hasura.app.default.*
 import io.hasura.ndc.ir.*
-import io.hasura.common.*
+import io.hasura.common.configuration.*
 import io.hasura.redshift.common.RedshiftDataType
 import org.jooq.impl.DSL.*
 import org.jooq.Field as JooqField
@@ -52,7 +52,7 @@ class RedshiftSchemaGenerator : DefaultSchemaGenerator<RedshiftDataType>() {
             RedshiftDataType.SUPER -> RepresentationType.JSON
             else -> null
         }
-        
+
         return createScalarType(representationType, columnType)
     }
 
@@ -98,7 +98,7 @@ class RedshiftSchemaGenerator : DefaultSchemaGenerator<RedshiftDataType>() {
                     else -> field
                 }
             }
-            RedshiftDataType.GEOGRAPHY, RedshiftDataType.GEOMETRY -> 
+            RedshiftDataType.GEOGRAPHY, RedshiftDataType.GEOMETRY ->
                 cast(field("ST_AsGeoJSON({0})", Any::class.java, field), SQLDataType.JSON)
             else -> field
         }

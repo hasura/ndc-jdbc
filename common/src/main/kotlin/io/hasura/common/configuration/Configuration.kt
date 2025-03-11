@@ -1,4 +1,4 @@
-package io.hasura.common
+package io.hasura.common.configuration
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -17,6 +17,5 @@ data class ConnectionUri(
 }
 
 interface Configuration {
-    @SerialName("connection_uri")
-    val connectionUri: ConnectionUri
+    @SerialName("connection_uri") val connectionUri: ConnectionUri
 }

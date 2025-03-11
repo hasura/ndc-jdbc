@@ -3,7 +3,7 @@ package io.hasura.app.base
 import io.hasura.ndc.connector.*
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
-import io.hasura.common.*
+import io.hasura.common.configuration.*
 import java.sql.Connection
 
 interface DatabaseConnection {
@@ -24,7 +24,7 @@ abstract class BaseHikariConnection(protected val config: Configuration) : Datab
     private val dataSource: HikariDataSource by lazy {
         try {
             val driver = getDriverConfig()
-            
+
             HikariDataSource(createBaseHikariConfig(driver.className).apply {
                 driver.configure(this)
             }).also {
@@ -79,4 +79,4 @@ abstract class BaseHikariConnection(protected val config: Configuration) : Datab
             connection.close()
         }
     }
-} 
+}

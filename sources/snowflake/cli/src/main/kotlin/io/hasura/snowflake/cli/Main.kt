@@ -1,6 +1,6 @@
 package io.hasura.snowflake.cli
 
-import io.hasura.common.*
+import io.hasura.common.configuration.*
 import io.hasura.ndc.ir.json
 import io.hasura.snowflake.common.SnowflakeDataType
 import kotlinx.cli.*
