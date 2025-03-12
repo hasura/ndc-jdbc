@@ -27,15 +27,22 @@ import schemacrawler.schemacrawler.*
 import schemacrawler.tools.utility.SchemaCrawlerUtility;
 import us.fatehi.utility.datasource.*
 import schemacrawler.tools.options.Config
+import io.hasura.common.configuration.Version
 
-interface IConfigGenerator<T : Configuration, U : ColumnType> {
+interface IConfigGenerator<T : Configuration<DatabricksDataType>, U : ColumnType> {
     fun generateConfig(config: T): DefaultConfiguration<U>
 }
 
 data class DatabricksConfiguration(
     override val connectionUri: ConnectionUri,
     val schemas: List<String> = emptyList()
-) : Configuration
+) : Configuration<DatabricksDataType> {
+    override val version = Version.V1
+
+    override fun toDefaultConfiguration(): DefaultConfiguration<DatabricksDataType> {
+        return DatabricksConfigGenerator.generateConfig(this)
+    }
+}
 
 
 object DatabricksConfigGenerator : IConfigGenerator<DatabricksConfiguration, DatabricksDataType> {
@@ -50,6 +57,7 @@ object DatabricksConfigGenerator : IConfigGenerator<DatabricksConfiguration, Dat
         val introspectionResult = introspectSchemas(config)
 
         return DefaultConfiguration(
+            version = config.version,
             connectionUri = config.connectionUri,
             tables = introspectionResult.tables,
             functions = introspectionResult.functions,

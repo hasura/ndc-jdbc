@@ -1,4 +1,4 @@
-.PHONY: build \
+.PHONY: build watch \
     build-snowflake build-snowflake-app build-snowflake-cli \
     build-bigquery build-bigquery-app build-bigquery-cli \
     build-redshift build-redshift-app build-redshift-cli \
@@ -18,6 +18,9 @@
 build:
 	./gradlew build
 
+watch:
+	./gradlew build --continuous
+
 build-snowflake:
 	build-snowflake-app
 	build-snowflake-cli
@@ -26,7 +29,7 @@ build-snowflake-app:
 	./gradlew :sources:snowflake:app:build
 
 build-snowflake-cli:
-	./gradlew :sources:snowflake:app:build
+	./gradlew :sources:snowflake:cli:build
 
 build-bigquery:
 	build-bigquery-app
@@ -36,7 +39,7 @@ build-bigquery-app:
 	./gradlew :sources:bigquery:app:build
 
 build-bigquery-cli:
-	./gradlew :sources:bigquery:app:build
+	./gradlew :sources:bigquery:cli:build
 
 build-redshift:
 	build-redshift-app
@@ -46,7 +49,7 @@ build-redshift-app:
 	./gradlew :sources:redshift:app:build
 
 build-redshift-cli:
-	./gradlew :sources:redshift:app:build
+	./gradlew :sources:redshift:cli:build
 
 build-databricks:
 	build-databricks-app
@@ -56,7 +59,7 @@ build-databricks-app:
 	./gradlew :sources:databricks:app:build
 
 build-databricks-cli:
-	./gradlew :sources:databricks:app:build
+	./gradlew :sources:databricks:cli:build
 
 run-snowflake:
 	OTEL_SERVICE_NAME=ndc-snowflake \

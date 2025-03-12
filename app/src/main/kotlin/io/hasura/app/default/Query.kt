@@ -18,6 +18,7 @@ import org.jooq.SQLDialect
 import org.jooq.impl.DSL.*
 import org.jooq.impl.SQLDataType
 
+
 const val variablesCTEName = "vars"
 const val resultsCTEName = "rlts"
 const val indexName = "idx"

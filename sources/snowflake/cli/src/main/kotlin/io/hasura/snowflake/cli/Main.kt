@@ -9,15 +9,27 @@ import kotlinx.serialization.json.Json
 import org.jooq.impl.DSL
 import kotlin.system.exitProcess
 
-interface IConfigGenerator<T : Configuration, U : ColumnType> {
+interface IConfigGenerator<T : Configuration<U>, U : ColumnType> {
     fun generateConfig(config: T): DefaultConfiguration<U>
 }
 
 data class SnowflakeConfiguration(
+    override val version: Version,
     override val connectionUri: ConnectionUri,
     val schemas: List<String> = emptyList(),
     val fullyQualifyTableNames: Boolean = false
-) : Configuration
+) : Configuration<SnowflakeDataType> {
+    override fun toDefaultConfiguration(): DefaultConfiguration<SnowflakeDataType> {
+        return DefaultConfiguration(
+            version = this.version,
+            connectionUri = this.connectionUri,
+            schemas = this.schemas,
+            tables = emptyList(),
+            functions = emptyList(),
+            nativeOperations = emptyMap()
+        )
+    }
+}
 
 
 object SnowflakeConfigGenerator : IConfigGenerator<SnowflakeConfiguration, SnowflakeDataType> {
@@ -27,6 +39,7 @@ object SnowflakeConfigGenerator : IConfigGenerator<SnowflakeConfiguration, Snowf
         val introspectionResult = introspectSchemas(config)
 
         return DefaultConfiguration(
+            version = config.version,
             connectionUri = config.connectionUri,
             tables = introspectionResult.tables,
             functions = introspectionResult.functions,
@@ -217,7 +230,7 @@ class UpdateCommand : Subcommand("update", "Update configuration file") {
 
         // If schemas is empty string or null do empty list
         val cleanedSchemas = schemas?.takeIf { it.isNotEmpty() }?.split(",") ?: emptyList()
-        val config = SnowflakeConfiguration(connectionUri, cleanedSchemas, fullyQualifyTableNames)
+        val config = SnowflakeConfiguration(Version.V1, connectionUri, cleanedSchemas, fullyQualifyTableNames)
         val generatedConfig = SnowflakeConfigGenerator.generateConfig(config)
 
         // Use the shared Json formatter

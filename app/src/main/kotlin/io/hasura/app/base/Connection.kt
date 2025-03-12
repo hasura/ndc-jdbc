@@ -13,7 +13,7 @@ interface DatabaseConnection {
     suspend fun <T> withConnection(block: suspend (Connection) -> T): T
 }
 
-abstract class BaseHikariConnection(protected val config: Configuration) : DatabaseConnection {
+abstract class BaseHikariConnection<C: ColumnType>(protected val config: Configuration<C>) : DatabaseConnection {
     protected abstract fun getDriverConfig(): DatabaseDriver
 
     protected data class DatabaseDriver(

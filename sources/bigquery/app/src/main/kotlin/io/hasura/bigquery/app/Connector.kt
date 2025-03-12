@@ -13,7 +13,7 @@ object BigQueryConnector : ConnectorBuilder<DefaultConfiguration<BigQueryType>, 
             source = DatabaseSource.BIGQUERY,
             connection = { config -> BigQueryConnection(config) },
             schemaGenerator = BigQuerySchemaGenerator(),
-            configSerializer = DefaultConfiguration.serializer(BigQueryType.serializer())
+            sourceColumnSerializer = BigQueryType.serializer()
         )
     }
 }

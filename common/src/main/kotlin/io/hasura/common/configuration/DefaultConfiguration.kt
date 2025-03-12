@@ -5,6 +5,8 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class DefaultConfiguration<T : ColumnType>(
+    @SerialName("version")
+    override val version: Version,
     @SerialName("connection_uri")
     override val connectionUri: ConnectionUri,
     val schemas: List<String> = emptyList(),
@@ -12,7 +14,11 @@ data class DefaultConfiguration<T : ColumnType>(
     val functions: List<FunctionInfo> = emptyList(),
     @SerialName("native_operations")
     val nativeOperations: Map<String, NativeOperation> = emptyMap()
-) : Configuration
+) : Configuration<T> {
+    override fun toDefaultConfiguration(): DefaultConfiguration<T> {
+        return this
+    }
+}
 
 @Serializable
 data class TableInfo<T : ColumnType>(

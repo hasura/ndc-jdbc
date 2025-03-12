@@ -21,14 +21,21 @@ import org.jooq.impl.DSL
 import java.io.File
 import kotlin.collections.joinToString
 import kotlin.system.exitProcess
+import io.hasura.common.configuration.Version
 
-interface IConfigGenerator<T : Configuration, U : ColumnType> {
+interface IConfigGenerator<T : Configuration<BigQueryType>, U : ColumnType> {
     fun generateConfig(config: T): DefaultConfiguration<U>
 }
 
 data class BigQueryConfiguration(
     override val connectionUri: ConnectionUri,
-) : Configuration
+) : Configuration<BigQueryType> {
+    override val version = Version.V1
+
+    override fun toDefaultConfiguration(): DefaultConfiguration<BigQueryType> {
+        return BigQueryConfigGenerator.generateConfig(this)
+    }
+}
 
 
 object BigQueryConfigGenerator : IConfigGenerator<BigQueryConfiguration, BigQueryType> {
@@ -82,6 +89,7 @@ object BigQueryConfigGenerator : IConfigGenerator<BigQueryConfiguration, BigQuer
         val introspectionResult = introspectSchemas(config)
 
         return DefaultConfiguration(
+            version = config.version,
             connectionUri = config.connectionUri,
             tables = introspectionResult.tables,
             functions = introspectionResult.functions,

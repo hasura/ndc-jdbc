@@ -10,6 +10,7 @@ import io.hasura.common.configuration.DefaultConfiguration
 import io.hasura.common.configuration.ForeignKeyInfo
 import io.hasura.common.configuration.FunctionInfo
 import io.hasura.common.configuration.TableInfo
+import io.hasura.common.configuration.Version
 import io.hasura.ndc.ir.json
 import kotlinx.cli.*
 import kotlinx.serialization.Serializable
@@ -27,14 +28,22 @@ import schemacrawler.tools.utility.SchemaCrawlerUtility;
 import us.fatehi.utility.datasource.*
 import schemacrawler.tools.options.Config
 
-interface IConfigGenerator<T : Configuration, U : ColumnType> {
+interface IConfigGenerator<T : Configuration<U>, U : ColumnType> {
     fun generateConfig(config: T): DefaultConfiguration<U>
 }
 
 data class RedshiftConfiguration(
     override val connectionUri: ConnectionUri,
     val schemas: List<String> = emptyList()
-) : Configuration
+) : Configuration<RedshiftDataType> {
+
+    override val version = Version.V1
+
+    override fun toDefaultConfiguration(): DefaultConfiguration<RedshiftDataType> {
+        return RedshiftConfigGenerator.generateConfig(this)
+    }
+
+}
 
 
 object RedshiftConfigGenerator : IConfigGenerator<RedshiftConfiguration, RedshiftDataType> {
@@ -49,6 +58,7 @@ object RedshiftConfigGenerator : IConfigGenerator<RedshiftConfiguration, Redshif
         val introspectionResult = introspectSchemas(config)
 
         return DefaultConfiguration(
+            version = config.version,
             connectionUri = config.connectionUri,
             tables = introspectionResult.tables,
             functions = introspectionResult.functions,

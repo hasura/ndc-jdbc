@@ -3,7 +3,7 @@ package io.hasura.app.base
 import io.hasura.ndc.ir.*
 import io.hasura.common.configuration.*
 
-interface DatabaseQuery<T : Configuration> {
+interface DatabaseQuery<T : Configuration<*>> {
     fun generateQuery(): String
     fun generateAggregateQuery(): String
     fun generateExplainQuery(): String

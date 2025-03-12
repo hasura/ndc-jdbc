@@ -11,6 +11,6 @@ object DatabricksConnector : ConnectorBuilder<DefaultConfiguration<DatabricksDat
         source = DatabaseSource.DATABRICKS,
         connection = { config -> DatabricksConnection(config) },
         schemaGenerator = DatabricksSchemaGenerator(),
-        configSerializer = DefaultConfiguration.serializer(DatabricksDataType.serializer())
+        sourceColumnSerializer = DatabricksDataType.serializer()
     )
 }

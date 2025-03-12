@@ -1,54 +1,94 @@
-package io.hasura.common.configuration
+import kotlinx.serialization.*
+import kotlinx.serialization.json.*
 
+import io.hasura.common.configuration.ColumnType
+import io.hasura.common.configuration.ConnectionUri
 import io.hasura.common.configuration.version1.ConfigurationV1
-import io.hasura.common.configuration.version1.ConnectionUri
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
+import io.hasura.common.configuration.version1.TableInfoV1
+import io.hasura.common.configuration.version1.FunctionInfoV1
+import io.hasura.common.configuration.version1.NativeOperationV1
+import io.hasura.common.configuration.DefaultConfiguration
+import kotlinx.serialization.builtins.serializer
 
+
+
+
+/**
+ * Enum representing configuration versions
+ */
 @Serializable
-enum class ParsedConfiguration {
+enum class ConfigVersion {
     @SerialName("v1")
-    V1;
+    V1,
 
-    companion object {
-        private val json = Json { ignoreUnknownKeys = false }
+    // More versions can be added here in the future
+}
 
-        // Parse configuration from JSON string
-        fun parse(jsonString: String): ConfigurationV1 {
-            // First determine the version (could be extended for future versions)
-            return when (determineVersion(jsonString)) {
-                V1 -> parseV1(jsonString)
+/**
+ * Base interface for all configuration versions
+ */
+interface Configuration<T : ColumnType> {
+    val version: ConfigVersion
+
+    /**
+     * Convert this specific configuration to the standard DefaultConfiguration
+     */
+    fun toDefaultConfiguration(): DefaultConfiguration<T>
+}
+
+
+/**
+ * Main configuration parser responsible for handling different versions
+ */
+object ConfigurationParser {
+    // Make json public so it can be accessed from inline functions
+    val json = Json {
+        ignoreUnknownKeys = false
+        isLenient = true
+    }
+
+    /**
+     * Parse configuration from JSON string
+     * This public method can be called directly from your DefaultConnector
+     */
+    inline fun <reified T : ColumnType> parse(jsonString: String, serializer: KSerializer<T>): DefaultConfiguration<T> {
+        return parseInternal(jsonString, serializer)
+    }
+
+    /**
+     * Internal implementation of the parse function
+     * This separates the public API from the implementation details
+     */
+    @PublishedApi
+    internal inline fun <reified T : ColumnType> parseInternal(jsonString: String, serializer: KSerializer<T>): DefaultConfiguration<T> {
+        val version = determineVersion(jsonString)
+
+        return when (version) {
+            ConfigVersion.V1 -> {
+                val configV1 = json.decodeFromString(ConfigurationV1.serializer(serializer), jsonString)
+                configV1.toDefaultConfiguration()
             }
+            // Additional versions can be handled here in the future
         }
+    }
 
-        // Helper to determine version from JSON
-        private fun determineVersion(jsonString: String): ParsedConfiguration {
-            // For now we only have V1, but this method allows for future extension
-            // In future versions, we could parse a version field from the JSON
-            return V1
-        }
+    /**
+     * Determine the version from the JSON string
+     * Made public to be accessible from inline functions
+     */
+    @PublishedApi
+    internal fun determineVersion(jsonString: String): ConfigVersion {
+        @Serializable
+        data class VersionWrapper(val version: String)
 
-        // V1-specific parsing logic
-        private fun parseV1(jsonString: String): ConfigurationV1 {
-            return try {
-                json.decodeFromString<ConfigurationV1>(jsonString)
-            } catch (e: Exception) {
-                throw IllegalArgumentException("Failed to parse V1 configuration: ${e.message}")
+        return try {
+            val versionInfo = json.decodeFromString<VersionWrapper>(jsonString)
+            when (versionInfo.version) {
+                "v1" -> ConfigVersion.V1
+                else -> throw IllegalArgumentException("Unsupported configuration version: ${versionInfo.version}")
             }
-        }
-
-        // Create default configuration for a specific version
-        fun defaultFor(version: ParsedConfiguration): ConfigurationV1 {
-            return when (version) {
-                V1 -> ConfigurationV1(
-                    connectionUri = ConnectionUri(),
-                    schemas = emptyList(),
-                    tables = emptyList(),
-                    functions = emptyList(),
-                    nativeOperations = emptyMap()
-                )
-            }
+        } catch (e: Exception) {
+            throw IllegalArgumentException("Failed to determine configuration version: ${e.message}")
         }
     }
 }
