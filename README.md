@@ -4,6 +4,7 @@ A Hasura Native Data Connector (NDC) implementation for JDBC databases, currentl
 
 - Snowflake
 - BigQuery
+- Databricks
 - Redshift
 
 ## Overview

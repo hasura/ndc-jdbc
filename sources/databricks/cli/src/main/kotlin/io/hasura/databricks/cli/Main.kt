@@ -1,15 +1,15 @@
 package io.hasura.databricks.cli
 
 import io.hasura.databricks.common.*
-import io.hasura.common.Category
-import io.hasura.common.Column
-import io.hasura.common.ColumnType
-import io.hasura.common.Configuration
-import io.hasura.common.ConnectionUri
-import io.hasura.common.DefaultConfiguration
-import io.hasura.common.ForeignKeyInfo
-import io.hasura.common.FunctionInfo
-import io.hasura.common.TableInfo
+import io.hasura.common.configuration.Category
+import io.hasura.common.configuration.Column
+import io.hasura.common.configuration.ColumnType
+import io.hasura.common.configuration.Configuration
+import io.hasura.common.configuration.ConnectionUri
+import io.hasura.common.configuration.DefaultConfiguration
+import io.hasura.common.configuration.ForeignKeyInfo
+import io.hasura.common.configuration.FunctionInfo
+import io.hasura.common.configuration.TableInfo
 import io.hasura.ndc.ir.json
 import kotlinx.cli.*
 import kotlinx.serialization.Serializable
@@ -102,7 +102,7 @@ object DatabricksConfigGenerator : IConfigGenerator<DatabricksConfiguration, Dat
                 JOIN information_schema.tables t
                 ON c.table_schema = t.table_schema AND c.table_name = t.table_name
                 WHERE c.table_schema NOT IN ('information_schema', 'sys')
-                ${if (config.schemas.isNotEmpty()) 
+                ${if (config.schemas.isNotEmpty())
                     "AND LOWER(c.table_schema) IN (${config.schemas.joinToString(",") { "'${it.lowercase()}'" }})"
                 else ""}
             ),

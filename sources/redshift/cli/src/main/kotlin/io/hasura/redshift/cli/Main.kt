@@ -1,15 +1,15 @@
 package io.hasura.redshift.cli
 
 import io.hasura.redshift.common.*
-import io.hasura.common.Category
-import io.hasura.common.Column
-import io.hasura.common.ColumnType
-import io.hasura.common.Configuration
-import io.hasura.common.ConnectionUri
-import io.hasura.common.DefaultConfiguration
-import io.hasura.common.ForeignKeyInfo
-import io.hasura.common.FunctionInfo
-import io.hasura.common.TableInfo
+import io.hasura.common.configuration.Category
+import io.hasura.common.configuration.Column
+import io.hasura.common.configuration.ColumnType
+import io.hasura.common.configuration.Configuration
+import io.hasura.common.configuration.ConnectionUri
+import io.hasura.common.configuration.DefaultConfiguration
+import io.hasura.common.configuration.ForeignKeyInfo
+import io.hasura.common.configuration.FunctionInfo
+import io.hasura.common.configuration.TableInfo
 import io.hasura.ndc.ir.json
 import kotlinx.cli.*
 import kotlinx.serialization.Serializable
@@ -127,8 +127,8 @@ object RedshiftConfigGenerator : IConfigGenerator<RedshiftConfiguration, Redshif
                       table.name != it.primaryKeyTable.name
                     }.associate { fk ->
                       fk.name to ForeignKeyInfo(
-                        columnMapping = fk.columnReferences.associate { 
-                          it.primaryKeyColumn.name to it.foreignKeyColumn.name 
+                        columnMapping = fk.columnReferences.associate {
+                          it.primaryKeyColumn.name to it.foreignKeyColumn.name
                         },
                         foreignCollection = fk.referencedTable.name
                       )

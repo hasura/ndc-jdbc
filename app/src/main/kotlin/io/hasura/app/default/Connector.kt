@@ -4,12 +4,13 @@ import io.hasura.app.base.*
 import io.hasura.ndc.connector.*
 import io.hasura.ndc.ir.*
 import io.micrometer.core.instrument.MeterRegistry
-import kotlinx.serialization.json.*
+import io.opentelemetry.context.Context
 import java.nio.file.Path
+import kotlinx.coroutines.*
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.json.*
 import kotlinx.serialization.json.Json
 import io.hasura.common.configuration.*
-import kotlinx.coroutines.*
 
 class DefaultState<T : ColumnType>(
     val configuration: DefaultConfiguration<T>,
@@ -94,69 +95,66 @@ open class DefaultConnector<T : ColumnType>(
         state: DefaultState<T>,
         request: QueryRequest
     ): QueryResponse {
-        return Telemetry.withActiveSpan("acquireDatabaseConnection") { _ ->
-            val connection = state.client.getConnection()
-            try {
-                Telemetry.withActiveSpan("queryDatabase") { _ ->
-                    coroutineScope {
-                        val query = DefaultQuery(
-                            configuration,
-                            state,
-                            schemaGenerator,
-                            source,
-                            request
-                        )
-                        val queryExecutor = DefaultConnection(state.client)
+        return coroutineScope {
+            val currentContext = Context.current()
+            val query = DefaultQuery(
+                configuration,
+                state,
+                schemaGenerator,
+                source,
+                request
+            )
+            val queryExecutor = DefaultConnection(state.client)
 
-                        ConnectorLogger.logger.debug("Request: $request")
+            ConnectorLogger.logger.debug("Request: $request")
 
-                        // Handle regular query results
-                        val rowsAsync = async {
-                            request.query.fields?.let {
-                                queryExecutor.executeQuery(query.generateQuery())
-                            }
-                        }
-
-                        // Handle aggregates if present
-                        val aggregatesAsync = async {
-                            request.query.aggregates?.let {
-                                queryExecutor.executeQuery(query.generateAggregateQuery())
-//                                    .firstOrNull()?.let { JsonObject(it) }
-                                    .map{ JsonObject(it) }
-                            }
-                        }
-
-                        val rows = rowsAsync.await()
-                        val aggregates = aggregatesAsync.await()
-
-                        ConnectorLogger.logger.debug("Rows: $rows")
-                        ConnectorLogger.logger.debug("Aggregates: $aggregates")
-
-                        val variables = request.variables
-                        when {
-                            variables?.isEmpty() == true ->
-                                QueryResponse(rowSets = emptyList())
-                            variables == null ->
-                                QueryResponse(rowSets = listOf(RowSet(
-                                    rows = cleanUpRows(request, rows),
-                                    aggregates = aggregates?.firstOrNull()
-                                )))
-                            else ->
-                                QueryResponse(rowSets = variables.indices.map { index ->
-                                    RowSet(
-                                        rows = rows?.filter { row ->
-                                        row[indexName]?.toString()?.toIntOrNull() == index
-                                    }?.let { filteredRows ->
-                                        cleanUpRows(request, filteredRows)
-                                    },
-                                        aggregates = aggregates?.getOrNull(index)
-                                    )
-                                })
-                        }
+            // Handle regular query results
+            val rowsAsync = async {
+                request.query.fields?.let {
+                    Telemetry.withActiveSpanContext(currentContext, "executeRowsQuery") { _ ->
+                        queryExecutor.executeQuery(query.generateQuery())
                     }
                 }
-            } finally {
-                connection.close()
+            }
+
+            // Handle aggregates if present
+            val aggregatesAsync = async {
+                request.query.aggregates?.let {
+                    Telemetry.withActiveSpanContext(currentContext, "executeAggregatesQuery") { _ ->
+                        queryExecutor.executeQuery(query.generateAggregateQuery())
+                            .map{ JsonObject(it) }
+                    }
+                }
+            }
+
+            val rows = rowsAsync.await()
+            val aggregates = aggregatesAsync.await()
+
+            ConnectorLogger.logger.debug("Rows: $rows")
+            ConnectorLogger.logger.debug("Aggregates: $aggregates")
+
+            Telemetry.withActiveSpanContext(currentContext, "processResults") { _ ->
+                val variables = request.variables
+                when {
+                    variables?.isEmpty() == true ->
+                        QueryResponse(rowSets = emptyList())
+                    variables == null ->
+                        QueryResponse(rowSets = listOf(RowSet(
+                            rows = cleanUpRows(request, rows),
+                            aggregates = aggregates?.firstOrNull()
+                        )))
+                    else ->
+                        QueryResponse(rowSets = variables.indices.map { index ->
+                            RowSet(
+                                rows = rows?.filter { row ->
+                                row[indexName]?.toString()?.toIntOrNull() == index
+                            }?.let { filteredRows ->
+                                cleanUpRows(request, filteredRows)
+                            },
+                                aggregates = aggregates?.getOrNull(index)
+                            )
+                        })
+                }
             }
         }
     }
