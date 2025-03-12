@@ -207,4 +207,28 @@ class SnowflakeSchemaGenerator : DefaultSchemaGenerator<SnowflakeDataType>() {
             }
         }
     }
+
+    override fun handleRegexComparison(
+        field: JooqField<*>,
+        compareWith: JooqField<*>,
+        isCaseInsensitive: Boolean
+    ): Condition {
+        return if (isCaseInsensitive) {
+            field.likeIgnoreCase(compareWith.cast(SQLDataType.VARCHAR))
+        } else {
+            field.like(compareWith.cast(SQLDataType.VARCHAR))
+        }
+    }
+
+    override fun handleLikeComparison(
+        field: JooqField<*>,
+        compareWith: JooqField<*>,
+        isCaseInsensitive: Boolean
+    ): Condition {
+        return if (isCaseInsensitive) {
+            field.likeIgnoreCase(compareWith.cast(SQLDataType.VARCHAR))
+        } else {
+            field.like(compareWith.cast(SQLDataType.VARCHAR))
+        }
+    }
 }

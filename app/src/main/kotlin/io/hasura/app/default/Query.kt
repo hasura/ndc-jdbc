@@ -259,41 +259,7 @@ class DefaultQuery<T : ColumnType>(
         isNegated: Boolean,
         isCaseInsensitive: Boolean
     ): Condition {
-        val expr = when (source) {
-            DatabaseSource.SNOWFLAKE -> {
-                if (isCaseInsensitive) {
-                    condition("REGEXP_LIKE({0}, {1}, 'i')", field, compareWith)
-                } else {
-                    condition("REGEXP_LIKE({0}, {1})", field, compareWith)
-                }
-            }
-
-            DatabaseSource.BIGQUERY -> {
-                if (isCaseInsensitive) {
-                    condition("REGEXP_CONTAINS(LOWER({0}), LOWER({1}))", field, compareWith)
-                } else {
-                    condition("REGEXP_CONTAINS({0}, {1})", field, compareWith)
-                }
-            }
-
-            DatabaseSource.REDSHIFT -> {
-                if (isCaseInsensitive) {
-                    condition("LOWER({0}) SIMILAR TO LOWER({1})", field, compareWith)
-                } else {
-                    condition("{0} SIMILAR TO {1}", field, compareWith)
-                }
-            }
-
-            DatabaseSource.DATABRICKS -> {
-                if (isCaseInsensitive) {
-                    condition("REGEXP_LIKE(LOWER({0}), LOWER({1}))", field, compareWith)
-                } else {
-                    condition("REGEXP_LIKE({0}, {1})", field, compareWith)
-                }
-            }
-
-            else -> throw ConnectorError.NotSupported("Regex operations not supported for this database")
-        }
+        val expr = schemaGenerator.handleRegexComparison(field, compareWith, isCaseInsensitive)
         return if (isNegated) not(expr) else expr
     }
 
@@ -303,41 +269,7 @@ class DefaultQuery<T : ColumnType>(
         isNegated: Boolean,
         isCaseInsensitive: Boolean
     ): Condition {
-        val expr = when (source) {
-            DatabaseSource.SNOWFLAKE -> {
-                if (isCaseInsensitive) {
-                    field.likeIgnoreCase(compareWith.cast(SQLDataType.VARCHAR))
-                } else {
-                    field.like(compareWith.cast(SQLDataType.VARCHAR))
-                }
-            }
-
-            DatabaseSource.BIGQUERY -> {
-                if (isCaseInsensitive) {
-                    condition("LOWER({0}) LIKE LOWER({1})", field, compareWith)
-                } else {
-                    condition("{0} LIKE {1}", field, compareWith)
-                }
-            }
-
-            DatabaseSource.REDSHIFT -> {
-                if (isCaseInsensitive) {
-                    field.likeIgnoreCase(compareWith.cast(SQLDataType.VARCHAR))
-                } else {
-                    field.like(compareWith.cast(SQLDataType.VARCHAR))
-                }
-            }
-
-            DatabaseSource.DATABRICKS -> {
-                if (isCaseInsensitive) {
-                    condition("LOWER({0}) LIKE LOWER({1})", field, compareWith)
-                } else {
-                    condition("{0} LIKE {1}", field, compareWith)
-                }
-            }
-
-            else -> throw ConnectorError.NotSupported("Ilike operations not supported for this database")
-        }
+        val expr = schemaGenerator.handleLikeComparison(field, compareWith, isCaseInsensitive)
         return if (isNegated) not(expr) else expr
     }
 

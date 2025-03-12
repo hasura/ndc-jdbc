@@ -180,4 +180,28 @@ class BigQuerySchemaGenerator : DefaultSchemaGenerator<BigQueryType>() {
             }
         }
     }
+
+    override fun handleRegexComparison(
+        field: JooqField<*>,
+        compareWith: JooqField<*>,
+        isCaseInsensitive: Boolean
+    ): Condition {
+        return if (isCaseInsensitive) {
+            condition("REGEXP_CONTAINS(LOWER({0}), LOWER({1}))", field, compareWith)
+        } else {
+            condition("REGEXP_CONTAINS({0}, {1})", field, compareWith)
+        }
+    }
+
+    override fun handleLikeComparison(
+        field: JooqField<*>,
+        compareWith: JooqField<*>,
+        isCaseInsensitive: Boolean
+    ): Condition {
+        return if (isCaseInsensitive) {
+            condition("LOWER({0}) LIKE LOWER({1})", field, compareWith)
+        } else {
+            condition("{0} LIKE {1}", field, compareWith)
+        }
+    }
 }
