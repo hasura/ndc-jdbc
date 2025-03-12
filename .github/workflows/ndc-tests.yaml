@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        connector: [snowflake, bigquery, databricks]
+        connector: [snowflake, bigquery, redshift]
         include:
           - connector: snowflake
             jdbc_url_env: SNOWFLAKE_JDBC_URL
@@ -25,12 +25,12 @@ jobs:
             run_command: make run-bigquery
             test_dir: ndc-tests/bigquery
             port: 8082
-          - connector: databricks
-            jdbc_url_env: DATABRICKS_JDBC_URL
-            config_command: make run-databricks-introspection
-            run_command: make run-databricks
-            test_dir: ndc-tests/databricks
-            port: 8085
+          # - connector: databricks
+          #   jdbc_url_env: DATABRICKS_JDBC_URL
+          #   config_command: make run-databricks-introspection
+          #   run_command: make run-databricks
+          #   test_dir: ndc-tests/databricks
+          #   port: 8085
           - connector: redshift
             jdbc_url_env: REDSHIFT_JDBC_URL
             config_command: make run-redshift-introspection
