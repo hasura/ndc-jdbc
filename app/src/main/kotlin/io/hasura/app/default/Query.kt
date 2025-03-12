@@ -278,9 +278,9 @@ class DefaultQuery<T : ColumnType>(
 
             DatabaseSource.REDSHIFT -> {
                 if (isCaseInsensitive) {
-                    condition("REGEXP_LIKE(LOWER({0}), LOWER({1}))", field, compareWith)
+                    condition("LOWER({0}) SIMILAR TO LOWER({1})", field, compareWith)
                 } else {
-                    condition("REGEXP_LIKE({0}, {1})", field, compareWith)
+                    condition("{0} SIMILAR TO {1}", field, compareWith)
                 }
             }
 

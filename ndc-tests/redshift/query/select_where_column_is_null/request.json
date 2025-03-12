@@ -5,12 +5,12 @@
     "fields": {
       "InvoiceId": {
         "type": "column",
-        "column": "InvoiceId",
+        "column": "invoiceid",
         "arguments": {}
       },
       "BillingState": {
         "type": "column",
-        "column": "BillingState",
+        "column": "billingstate",
         "arguments": {}
       }
     },
@@ -18,7 +18,7 @@
       "type": "unary_comparison_operator",
       "column": {
         "type": "column",
-        "name": "BillingState",
+        "name": "billingstate",
         "path": []
       },
       "operator": "is_null"
@@ -29,7 +29,7 @@
           "order_direction": "asc",
           "target": {
             "type": "column",
-            "name": "InvoiceId",
+            "name": "invoiceid",
             "path": []
           }
         }
