@@ -214,9 +214,9 @@ class SnowflakeSchemaGenerator : DefaultSchemaGenerator<SnowflakeDataType>() {
         isCaseInsensitive: Boolean
     ): Condition {
         return if (isCaseInsensitive) {
-            field.likeIgnoreCase(compareWith.cast(SQLDataType.VARCHAR))
+            condition("REGEXP_LIKE({0}, {1}, 'i')", field, compareWith)
         } else {
-            field.like(compareWith.cast(SQLDataType.VARCHAR))
+            condition("REGEXP_LIKE({0}, {1})", field, compareWith)
         }
     }
 
