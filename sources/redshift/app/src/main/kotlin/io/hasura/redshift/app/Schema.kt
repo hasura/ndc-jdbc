@@ -205,4 +205,28 @@ class RedshiftSchemaGenerator : DefaultSchemaGenerator<RedshiftDataType>() {
             }
         }
     }
+
+    override fun handleRegexComparison(
+        field: JooqField<*>,
+        compareWith: JooqField<*>,
+        isCaseInsensitive: Boolean
+    ): Condition {
+        return if (isCaseInsensitive) {
+            condition("LOWER({0}) SIMILAR TO LOWER({1})", field, compareWith)
+        } else {
+            condition("{0} SIMILAR TO {1}", field, compareWith)
+        }
+    }
+
+    override fun handleLikeComparison(
+        field: JooqField<*>,
+        compareWith: JooqField<*>,
+        isCaseInsensitive: Boolean
+    ): Condition {
+        return if (isCaseInsensitive) {
+            field.likeIgnoreCase(compareWith.cast(SQLDataType.VARCHAR))
+        } else {
+            field.like(compareWith.cast(SQLDataType.VARCHAR))
+        }
+    }
 }
