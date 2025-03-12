@@ -13,7 +13,7 @@
     docker-databricks docker-databricks-app docker-databricks-cli \
 	  run-snowflake-introspection run-bigquery-introspection \
 	  run-databricks-introspection run-snowflake-cli \
-		run-redshicft-introspection
+		run-redshift-introspection
 
 
 build:
