@@ -1,5 +1,5 @@
 {
-  "collection": "albums",
+  "collection": "chinook.public.albums",
   "query": {
     "fields": {
       "AlbumId": {
