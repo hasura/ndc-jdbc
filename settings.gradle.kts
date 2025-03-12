@@ -1,7 +1,5 @@
 rootProject.name = "ndc-jdbc"
 
-includeBuild("../ndc-sdk-kotlin/")
-
 include(":app")
 include(":common")
 include(":sources:bigquery", ":sources:bigquery:app", ":sources:bigquery:cli")
