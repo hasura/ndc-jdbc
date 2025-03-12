@@ -12,7 +12,8 @@
     docker-redshift docker-redshift-app docker-redshift-cli \
     docker-databricks docker-databricks-app docker-databricks-cli \
 	  run-snowflake-introspection run-bigquery-introspection \
-	  run-databricks-introspection run-snowflake-cli
+	  run-databricks-introspection run-snowflake-cli \
+	  run-redshift-introspection
 
 
 build:
@@ -82,6 +83,12 @@ ifndef JDBC_URL
 	$(error JDBC_URL environment variable is not set)
 endif
 	./gradlew ':sources:databricks:cli:run' --args="update --jdbc-url JDBC_URL --outfile ../../../configs/databricks/configuration.json"
+
+run-redshift-introspection:
+ifndef JDBC_URL
+	$(error JDBC_URL environment variable is not set)
+endif
+	./gradlew ':sources:redshift:cli:run' --args="update --jdbc-url JDBC_URL --outfile ../../../configs/redshift/configuration.json"
 
 run-bigquery:
 	OTEL_SERVICE_NAME=ndc-bigquery \

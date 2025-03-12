@@ -1,5 +1,5 @@
 {
-  "collection": "albums",
+  "collection": "chinook.public.albums",
   "query": {
     "limit": 5,
     "fields": {
@@ -26,7 +26,11 @@
         "operator": "_in",
         "value": {
           "type": "scalar",
-          "value": ["Balls to the Wall", "Let There Be Rock", "Something else"]
+          "value": [
+            "Balls to the Wall",
+            "Let There Be Rock",
+            "Something else"
+          ]
         }
       }
     },

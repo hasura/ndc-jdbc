@@ -2,23 +2,23 @@
   {
     "rows": [
       {
-        "InvoiceId": "1",
+        "InvoiceId": 1,
         "BillingState": null
       },
       {
-        "InvoiceId": "2",
+        "InvoiceId": 2,
         "BillingState": null
       },
       {
-        "InvoiceId": "3",
+        "InvoiceId": 3,
         "BillingState": null
       },
       {
-        "InvoiceId": "6",
+        "InvoiceId": 6,
         "BillingState": null
       },
       {
-        "InvoiceId": "7",
+        "InvoiceId": 7,
         "BillingState": null
       }
     ]

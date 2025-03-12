@@ -90,6 +90,18 @@ open class DefaultConnector<T : ColumnType>(
         }
     }
 
+    fun cleanUpAggregates(request: QueryRequest, aggregates: List<Map<String, JsonElement>>?): List<Map<String, JsonElement>>? {
+        return aggregates?.map { agg ->
+            agg.entries.mapNotNull { (key, value) ->
+                request.query.aggregates?.keys?.find { it.equals(key, ignoreCase = true) }?.let { matchedKey ->
+                    matchedKey to value
+                }
+            }.toMap()
+        }?.map { agg ->
+            agg.filterKeys { it != indexName }
+        }
+    }
+
     override suspend fun query(
         configuration: DefaultConfiguration<T>,
         state: DefaultState<T>,
@@ -122,7 +134,6 @@ open class DefaultConnector<T : ColumnType>(
                 request.query.aggregates?.let {
                     Telemetry.withActiveSpanContext(currentContext, "executeAggregatesQuery") { _ ->
                         queryExecutor.executeQuery(query.generateAggregateQuery())
-                            .map{ JsonObject(it) }
                     }
                 }
             }
@@ -133,6 +144,8 @@ open class DefaultConnector<T : ColumnType>(
             ConnectorLogger.logger.debug("Rows: $rows")
             ConnectorLogger.logger.debug("Aggregates: $aggregates")
 
+            ConnectorLogger.logger.debug("Cleaned Aggregates: ${cleanUpAggregates(request, aggregates)?.map{ JsonObject(it) }?.firstOrNull()}")
+
             Telemetry.withActiveSpanContext(currentContext, "processResults") { _ ->
                 val variables = request.variables
                 when {
@@ -141,7 +154,9 @@ open class DefaultConnector<T : ColumnType>(
                     variables == null ->
                         QueryResponse(rowSets = listOf(RowSet(
                             rows = cleanUpRows(request, rows),
-                            aggregates = aggregates?.firstOrNull()
+                            aggregates = cleanUpAggregates(request, aggregates)
+                                ?.map{ JsonObject(it) }
+                                ?.firstOrNull()
                         )))
                     else ->
                         QueryResponse(rowSets = variables.indices.map { index ->
@@ -151,7 +166,9 @@ open class DefaultConnector<T : ColumnType>(
                             }?.let { filteredRows ->
                                 cleanUpRows(request, filteredRows)
                             },
-                                aggregates = aggregates?.getOrNull(index)
+                                aggregates = cleanUpAggregates(request, aggregates)
+                                    ?.map{ JsonObject(it) }
+                                    ?.getOrNull(index)
                             )
                         })
                 }
