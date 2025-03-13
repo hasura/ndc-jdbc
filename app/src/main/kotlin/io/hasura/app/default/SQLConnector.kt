@@ -4,10 +4,7 @@ import io.hasura.app.base.DatabaseConnection
 import io.hasura.app.base.DatabaseSource
 import io.hasura.common.ColumnType
 import io.hasura.common.DefaultConfiguration
-import io.hasura.ndc.ir.Literal
-import io.hasura.ndc.ir.Plan
-import io.hasura.ndc.ir.PlanExpression
-import io.hasura.ndc.ir.json
+import io.hasura.ndc.ir.*
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.JsonArray
@@ -41,7 +38,6 @@ class SQLConnector<T : ColumnType>(
 
         return coroutineScope {
             // val queryExecutor = DefaultConnection(state.client)
-
             val emptyRows = JsonArray(emptyList())
             emptyRows
         }
@@ -65,45 +61,33 @@ object PlanConverter {
     }
 
     fun convertFrom(from: Plan.From): String {
-        println("From: $from")
-        return "FROM ${from.collection}"
+        // id AS column_0, name AS column_1 ...
+        val columnAliases = from.columns.mapIndexed { index, column -> "$column AS column_$index" }
+        return "SELECT ${columnAliases.joinToString(", ")} FROM ${from.collection}"
     }
 
     fun convertFilter(filter: Plan.Filter): String {
-        println("Filter: $filter")
-        return "${convertPlan(filter.input)} WHERE ${convertExpr(filter.predicate)}"
+        return "SELECT * FROM (${convertPlan(filter.input)}) WHERE ${convertExpr(filter.predicate)}"
     }
 
     fun convertAggregate(aggregate: Plan.Aggregate): String {
-        println("Aggregate: $aggregate")
-        return "GROUP BY ${aggregate.aggregates.joinToString(", ") { convertExpr(it) }}"
+        return "SELECT ${aggregate.aggregates.joinToString(", ") { convertExpr(it) }} FROM (${convertPlan(aggregate.input)})"
     }
 
     fun convertSort(sort: Plan.Sort): String {
-        println("Sort: $sort")
-        return "ORDER BY ${
-            sort.exprs.joinToString(", ") {
-                convertExpr(it.expr) + if (it.asc == false) {
-                    " DESC"
-                } else {
-                    " ASC"
-                } + if (it.nulls_first) {
-                    " NULLS FIRST"
-                } else {
-                    " NULLS LAST"
-                }
-            }
-        }"
+        fun convertSortExpr(sortExpr: SortExpr): String {
+            return "${convertExpr(sortExpr.expr)} ${if (sortExpr.asc) "ASC" else "DESC"} ${if (sortExpr.nulls_first) "NULLS FIRST" else "NULLS LAST"}"
+        }
+
+        return "SELECT * FROM (${convertPlan(sort.input)}) ORDER BY ${sort.exprs.joinToString(", ") { convertSortExpr(it) }}"
     }
 
     fun convertLimit(limit: Plan.Limit): String {
-        println("Limit: $limit")
-        return "${convertPlan(limit.input)} LIMIT ${limit.fetch} OFFSET ${limit.skip}"
+        return "SELECT * FROM (${convertPlan(limit.input)}) LIMIT ${limit.fetch} OFFSET ${limit.skip}"
     }
 
     fun convertProject(project: Plan.Project): String {
-        println("Project: $project")
-        return "SELECT ${project.exprs.joinToString(", ") { convertExpr(it) }} ${convertPlan(project.input)} "
+        return "SELECT ${project.exprs.joinToString(", ") { convertExpr(it) }} FROM (${convertPlan(project.input)})"
     }
 
     fun convertExpr(expr: PlanExpression): String = when (expr) {
@@ -112,7 +96,7 @@ object PlanConverter {
         is PlanExpression.Between -> "BETWEEN ${convertExpr(expr.low)} AND ${convertExpr(expr.high)}"
         is PlanExpression.BoolAnd -> TODO()
         is PlanExpression.BoolOr -> TODO()
-        is PlanExpression.Column -> expr.index.toString()
+        is PlanExpression.Column -> "column_${expr.index}"
         is PlanExpression.Count -> "COUNT(${convertExpr(expr.expr)})"
         is PlanExpression.Divide -> "${convertExpr(expr.left)} / ${convertExpr(expr.right)}"
         is PlanExpression.Eq -> "${convertExpr(expr.left)} = ${convertExpr(expr.right)}"
