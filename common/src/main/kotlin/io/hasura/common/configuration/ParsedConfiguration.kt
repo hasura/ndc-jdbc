@@ -9,6 +9,7 @@ import io.hasura.common.configuration.version1.FunctionInfoV1
 import io.hasura.common.configuration.version1.NativeOperationV1
 import io.hasura.common.configuration.DefaultConfiguration
 import kotlinx.serialization.builtins.serializer
+import java.nio.file.Path
 
 
 
@@ -48,23 +49,26 @@ object ConfigurationParser {
     }
 
     /**
-     * Parse configuration from JSON string
+     * Parse configuration from a directory containing configuration.json
      * This public method can be called directly from your DefaultConnector
      */
-    inline fun <reified T : ColumnType> parse(jsonString: String, serializer: KSerializer<T>): DefaultConfiguration<T> {
-        return parseInternal(jsonString, serializer)
+    fun <T : ColumnType> parse(configurationDir: Path, serializer: KSerializer<T>): DefaultConfiguration<T> {
+        return parseInternal(configurationDir, serializer)
     }
 
     /**
      * Internal implementation of the parse function
      * This separates the public API from the implementation details
      */
-    @PublishedApi
-    internal inline fun <reified T : ColumnType> parseInternal(jsonString: String, serializer: KSerializer<T>): DefaultConfiguration<T> {
+    internal fun <T : ColumnType> parseInternal(configurationDir: Path, serializer: KSerializer<T>): DefaultConfiguration<T> {
+        val configFile = configurationDir.resolve("configuration.json")
+        val jsonString = configFile.toFile().readText()
+
         val version = determineVersion(jsonString)
 
         return when (version) {
             ConfigVersion.V1 -> {
+
                 val configV1 = json.decodeFromString(ConfigurationV1.serializer(serializer), jsonString)
                 configV1.toDefaultConfiguration()
             }
@@ -74,21 +78,28 @@ object ConfigurationParser {
 
     /**
      * Determine the version from the JSON string
-     * Made public to be accessible from inline functions
      */
-    @PublishedApi
     internal fun determineVersion(jsonString: String): ConfigVersion {
-        @Serializable
-        data class VersionWrapper(val version: String)
-
         return try {
-            val versionInfo = json.decodeFromString<VersionWrapper>(jsonString)
-            when (versionInfo.version) {
-                "v1" -> ConfigVersion.V1
-                else -> throw IllegalArgumentException("Unsupported configuration version: ${versionInfo.version}")
+            // Create a JSON element from the string
+            val jsonElement = json.parseToJsonElement(jsonString)
+
+            // Extract the version field
+            val versionString = jsonElement.jsonObject["version"]?.jsonPrimitive?.contentOrNull
+                ?: throw IllegalArgumentException("Missing or invalid 'version' field in configuration")
+
+            // Parse directly to the enum
+            try {
+                json.decodeFromString<ConfigVersion>("\"$versionString\"")
+            } catch (e: SerializationException) {
+                throw IllegalArgumentException("Unsupported configuration version: $versionString")
             }
         } catch (e: Exception) {
-            throw IllegalArgumentException("Failed to determine configuration version: ${e.message}")
+            when (e) {
+                is IllegalArgumentException -> throw e
+                else -> throw IllegalArgumentException("Failed to determine configuration version: ${e.message}")
+            }
         }
     }
+
 }

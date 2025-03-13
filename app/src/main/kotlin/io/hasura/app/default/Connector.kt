@@ -27,17 +27,8 @@ open class DefaultConnector<T : ColumnType>(
     private val sourceColumnSerializer: KSerializer<T>
 ) : Connector<DefaultConfiguration<T>, DefaultState<T>> {
     override suspend fun parseConfiguration(configurationDir: Path): DefaultConfiguration<T> {
-        val configFile = configurationDir.resolve("configuration.json")
-
         return try {
-            val jsonString = configFile.toFile().readText()
-
-            val version = Json.parseToJsonElement(jsonString).jsonObject["version"]?.jsonPrimitive?.content
-
-            when (version) {
-                "v1" -> json.decodeFromString(ConfigurationV1.serializer(sourceColumnSerializer), jsonString).toDefaultConfiguration()
-                else -> throw IllegalStateException("Unsupported configuration version: $version")
-            }
+            ConfigurationParser.parse(configurationDir, sourceColumnSerializer)
 
         } catch (e: Exception) {
             ConnectorLogger.logger.error("Fatal error: Failed to parse configuration file: ${e.message}")
