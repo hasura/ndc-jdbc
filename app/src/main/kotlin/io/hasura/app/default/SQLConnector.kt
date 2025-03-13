@@ -32,12 +32,18 @@ class SQLConnector<T : ColumnType>(
         return coroutineScope {
             val queryExecutor = DefaultConnection(state.client)
 
+            ConnectorLogger.logger.debug("Request: $request")
+
             val fixedSql = fixQuotesForFullyQualifiedTableNames(request.sql)
             val sql = DSL.using(SQLDialect.DEFAULT)
                 .parser()
                 .parseResultQuery(fixedSql)
 
-            queryExecutor.executeSQL(sql)
+            val results = queryExecutor.executeSQL(sql)
+
+            ConnectorLogger.logger.debug("Results: $results")
+
+            results
         }
     }
 

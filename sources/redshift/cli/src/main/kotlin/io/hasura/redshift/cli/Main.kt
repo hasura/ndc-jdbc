@@ -109,7 +109,6 @@ object RedshiftConfigGenerator : IConfigGenerator<RedshiftConfiguration, Redshif
                     },
                     description = table.remarks,
                     columns = table.columns.map { column ->
-                        println("column: ${column.columnDataType.name}")
                         Column<RedshiftDataType>(
                             name = column.name,
                             type = getRedshiftDataType(
@@ -138,7 +137,6 @@ object RedshiftConfigGenerator : IConfigGenerator<RedshiftConfiguration, Redshif
 
             return IntrospectionResult(tables = tables)
         } finally {
-            // connection.close()
         }
     }
 
