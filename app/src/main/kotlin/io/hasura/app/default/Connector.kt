@@ -144,8 +144,6 @@ open class DefaultConnector<T : ColumnType>(
             ConnectorLogger.logger.debug("Rows: $rows")
             ConnectorLogger.logger.debug("Aggregates: $aggregates")
 
-            ConnectorLogger.logger.debug("Cleaned Aggregates: ${cleanUpAggregates(request, aggregates)?.map{ JsonObject(it) }?.firstOrNull()}")
-
             Telemetry.withActiveSpanContext(currentContext, "processResults") { _ ->
                 val variables = request.variables
                 when {
