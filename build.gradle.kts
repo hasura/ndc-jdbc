@@ -5,6 +5,7 @@ plugins {
 allprojects {
     repositories {
         mavenCentral()
+        mavenLocal()
         google()
         maven { url = uri("https://raw.githubusercontent.com/hasura/ndc-sdk-kotlin/m2repo/") }
         maven {
@@ -28,7 +29,7 @@ subprojects {
                 }
             }
         }
-        
+
         dependencies {
             "implementation"(libs.arvo)
             "implementation"(libs.hikari)
@@ -41,11 +42,11 @@ subprojects {
             "implementation"(libs.vertx.kotlin)
             "implementation"(libs.vertx.kotlin.coroutines)
             "implementation"(libs.vertx.web)
-            
+
             // Micrometer
             "implementation"("io.micrometer:micrometer-core:1.11.3")
             "implementation"("io.micrometer:micrometer-registry-prometheus:1.11.3")
-            
+
             // OpenTelemetry
             "implementation"(libs.opentelemetry.api)
             "implementation"(libs.opentelemetry.sdk)

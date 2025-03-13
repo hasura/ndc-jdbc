@@ -1,17 +1,16 @@
 package io.hasura.app.default
 
-import io.hasura.app.base.*
-import io.hasura.app.default.*
-import io.hasura.app.util.JsonUtils
-import io.hasura.common.*
-import io.hasura.ndc.connector.*
-import io.hasura.ndc.connector.ConnectorLogger
-import io.hasura.ndc.ir.*
-import kotlinx.coroutines.*
+import io.hasura.app.base.DatabaseConnection
+import io.hasura.app.base.DatabaseSource
+import io.hasura.common.ColumnType
+import io.hasura.common.DefaultConfiguration
+import io.hasura.ndc.ir.Literal
+import io.hasura.ndc.ir.Plan
+import io.hasura.ndc.ir.PlanExpression
+import io.hasura.ndc.ir.json
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.json.*
-import org.jooq.SQLDialect
-import org.jooq.impl.DSL
+import kotlinx.serialization.json.JsonArray
 
 class SQLConnector<T : ColumnType>(
     private val source: DatabaseSource,
@@ -27,26 +26,167 @@ class SQLConnector<T : ColumnType>(
     override suspend fun sql(
         configuration: DefaultConfiguration<T>,
         state: DefaultState<T>,
-        request: SQLRequest
+        plan: Plan
     ): JsonArray {
+        println("Received plan: $plan")
+        println(json.encodeToString(plan))
+        println()
+
+        val sql = PlanConverter.convertPlan(plan)
+        println()
+
+        println("Generated SQL:")
+        println("==============")
+        println(sql)
+
         return coroutineScope {
-            val queryExecutor = DefaultConnection(state.client)
+            // val queryExecutor = DefaultConnection(state.client)
 
-            val fixedSql = fixQuotesForFullyQualifiedTableNames(request.sql)
-            val sql = DSL.using(SQLDialect.DEFAULT)
-                .parser()
-                .parseResultQuery(fixedSql)
-
-            queryExecutor.executeSQL(sql)
-        }
-    }
-
-    // Replace "DB.SCHEMA.TABLE" with "DB"."SCHEMA"."TABLE"
-    private fun fixQuotesForFullyQualifiedTableNames(sql: String): String {
-        return sql.replace(Regex("\"?([a-zA-Z0-9_]+)\\.([a-zA-Z0-9_]+)\\.([a-zA-Z0-9_]+)\"?")) {
-            val (db, schema, table) = it.destructured
-            "\"$db\".\"$schema\".\"$table\""
+            val emptyRows = JsonArray(emptyList())
+            emptyRows
         }
     }
 }
+
+object PlanConverter {
+
+    fun convertPlan(plan: Plan): String {
+        return when (plan) {
+            is Plan.Aggregate -> convertAggregate(plan)
+            is Plan.Distinct -> TODO()
+            is Plan.DistinctOn -> TODO()
+            is Plan.Filter -> convertFilter(plan)
+            is Plan.From -> convertFrom(plan)
+            is Plan.Join -> TODO()
+            is Plan.Limit -> convertLimit(plan)
+            is Plan.Project -> convertProject(plan)
+            is Plan.Sort -> convertSort(plan)
+        }
+    }
+
+    fun convertFrom(from: Plan.From): String {
+        println("From: $from")
+        return "FROM ${from.collection}"
+    }
+
+    fun convertFilter(filter: Plan.Filter): String {
+        println("Filter: $filter")
+        return "${convertPlan(filter.input)} WHERE ${convertExpr(filter.predicate)}"
+    }
+
+    fun convertAggregate(aggregate: Plan.Aggregate): String {
+        println("Aggregate: $aggregate")
+        return "GROUP BY ${aggregate.aggregates.joinToString(", ") { convertExpr(it) }}"
+    }
+
+    fun convertSort(sort: Plan.Sort): String {
+        println("Sort: $sort")
+        return "ORDER BY ${
+            sort.exprs.joinToString(", ") {
+                convertExpr(it.expr) + if (it.asc == false) {
+                    " DESC"
+                } else {
+                    " ASC"
+                } + if (it.nulls_first) {
+                    " NULLS FIRST"
+                } else {
+                    " NULLS LAST"
+                }
+            }
+        }"
+    }
+
+    fun convertLimit(limit: Plan.Limit): String {
+        println("Limit: $limit")
+        return "${convertPlan(limit.input)} LIMIT ${limit.fetch} OFFSET ${limit.skip}"
+    }
+
+    fun convertProject(project: Plan.Project): String {
+        println("Project: $project")
+        return "SELECT ${project.exprs.joinToString(", ") { convertExpr(it) }} ${convertPlan(project.input)} "
+    }
+
+    fun convertExpr(expr: PlanExpression): String = when (expr) {
+        is PlanExpression.And -> "${convertExpr(expr.left)} AND ${convertExpr(expr.right)}"
+        is PlanExpression.Average -> "AVG(${convertExpr(expr.expr)})"
+        is PlanExpression.Between -> "BETWEEN ${convertExpr(expr.low)} AND ${convertExpr(expr.high)}"
+        is PlanExpression.BoolAnd -> TODO()
+        is PlanExpression.BoolOr -> TODO()
+        is PlanExpression.Column -> expr.index.toString()
+        is PlanExpression.Count -> "COUNT(${convertExpr(expr.expr)})"
+        is PlanExpression.Divide -> "${convertExpr(expr.left)} / ${convertExpr(expr.right)}"
+        is PlanExpression.Eq -> "${convertExpr(expr.left)} = ${convertExpr(expr.right)}"
+        is PlanExpression.FirstValue -> TODO()
+        is PlanExpression.Gt -> "${convertExpr(expr.left)} > ${convertExpr(expr.right)}"
+        is PlanExpression.GtEq -> "${convertExpr(expr.left)} >= ${convertExpr(expr.right)}"
+        is PlanExpression.ILike -> "ILIKE ${expr.pattern}"
+        is PlanExpression.In -> "IN (${expr.list.map { convertExpr(it) }.joinToString(", ")})"
+        is PlanExpression.IsFalse -> "FALSE"
+        is PlanExpression.IsNotFalse -> "IS NOT FALSE"
+        is PlanExpression.IsNotNull -> "IS NOT NULL"
+        is PlanExpression.IsNotTrue -> "IS NOT TRUE"
+        is PlanExpression.IsNotUnknown -> "IS NOT UNKNOWN"
+        is PlanExpression.IsNull -> "IS NULL"
+        is PlanExpression.IsTrue -> "TRUE"
+        is PlanExpression.IsUnknown -> "IS UNKNOWN"
+        is PlanExpression.LastValue -> TODO()
+        is PlanExpression.Like -> "LIKE ${expr.pattern}"
+        is PlanExpression.PlanLiteral -> when (val x = expr.literal) {
+            is Literal.BooleanLiteral -> x.value.toString()
+            is Literal.Date32 -> x.value.toString()
+            is Literal.Date64 -> x.value.toString()
+            is Literal.DurationMicrosecond -> x.value.toString()
+            is Literal.DurationMillisecond -> x.value.toString()
+            is Literal.DurationNanosecond -> x.value.toString()
+            is Literal.DurationSecond -> x.value.toString()
+            is Literal.Float32 -> x.value.toString()
+            is Literal.Float64 -> x.value.toString()
+            is Literal.Int16 -> x.value.toString()
+            is Literal.Int32 -> x.value.toString()
+            is Literal.Int64 -> x.value.toString()
+            is Literal.Int8 -> x.value.toString()
+            Literal.Null -> "NULL"
+            is Literal.Time32Millisecond -> x.value.toString()
+            is Literal.Time32Second -> x.value.toString()
+            is Literal.Time64Microsecond -> x.value.toString()
+            is Literal.Time64Nanosecond -> x.value.toString()
+            is Literal.TimestampMicrosecond -> x.value.toString()
+            is Literal.TimestampMillisecond -> x.value.toString()
+            is Literal.TimestampNanosecond -> x.value.toString()
+            is Literal.TimestampSecond -> x.value.toString()
+            is Literal.UInt16 -> x.value.toString()
+            is Literal.UInt32 -> x.value.toString()
+            is Literal.UInt64 -> x.value.toString()
+            is Literal.UInt8 -> x.value.toString()
+            is Literal.Utf8 -> x.value.toString()
+        }
+
+        is PlanExpression.Lt -> "${convertExpr(expr.left)} < ${convertExpr(expr.right)}"
+        is PlanExpression.LtEq -> "${convertExpr(expr.left)} <= ${convertExpr(expr.right)}"
+        is PlanExpression.Max -> "MAX(${convertExpr(expr.expr)})"
+        is PlanExpression.Mean -> "MEAN(${convertExpr(expr.expr)})"
+        is PlanExpression.Median -> "MEDIAN(${convertExpr(expr.expr)})"
+        is PlanExpression.Min -> "MIN(${convertExpr(expr.expr)})"
+        is PlanExpression.Minus -> "${convertExpr(expr.left)} - ${convertExpr(expr.right)}"
+        is PlanExpression.Modulo -> "${convertExpr(expr.left)} % ${convertExpr(expr.right)}"
+        is PlanExpression.Multiply -> "${convertExpr(expr.left)} * ${convertExpr(expr.right)}"
+        is PlanExpression.Negative -> "-${convertExpr(expr.expr)}"
+        is PlanExpression.Not -> "NOT ${convertExpr(expr.expr)}"
+        is PlanExpression.NotBetween -> "NOT BETWEEN ${convertExpr(expr.low)} AND ${convertExpr(expr.high)}"
+        is PlanExpression.NotEq -> "${convertExpr(expr.left)} != ${convertExpr(expr.right)}"
+        is PlanExpression.NotILike -> "NOT ILIKE ${expr.pattern}"
+        is PlanExpression.NotIn -> "NOT IN (${expr.list.map { convertExpr(it) }.joinToString(", ")})"
+        is PlanExpression.NotLike -> "NOT LIKE ${expr.pattern}"
+        is PlanExpression.Or -> "${convertExpr(expr.left)} OR ${convertExpr(expr.right)}"
+        is PlanExpression.Plus -> "${convertExpr(expr.left)} + ${convertExpr(expr.right)}"
+        is PlanExpression.StringAgg -> TODO()
+        is PlanExpression.Sum -> "SUM(${convertExpr(expr.expr)})"
+        is PlanExpression.ToLower -> "LOWER(${convertExpr(expr.expr)})"
+        is PlanExpression.ToUpper -> "UPPER(${convertExpr(expr.expr)})"
+        is PlanExpression.Var -> TODO()
+    }
+
+}
+
+
 
