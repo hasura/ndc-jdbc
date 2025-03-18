@@ -3,7 +3,7 @@ package io.hasura.bigquery.app
 import io.hasura.app.base.*
 import io.hasura.app.default.*
 import io.hasura.bigquery.common.BigQueryType
-import io.hasura.common.*
+import io.hasura.common.configuration.*
 import io.hasura.ndc.connector.*
 import kotlinx.serialization.builtins.serializer
 
@@ -13,7 +13,7 @@ object BigQueryConnector : ConnectorBuilder<DefaultConfiguration<BigQueryType>, 
             source = DatabaseSource.BIGQUERY,
             connection = { config -> BigQueryConnection(config) },
             schemaGenerator = BigQuerySchemaGenerator(),
-            configSerializer = DefaultConfiguration.serializer(BigQueryType.serializer())
+            sourceColumnSerializer = BigQueryType.serializer()
         )
     }
 }

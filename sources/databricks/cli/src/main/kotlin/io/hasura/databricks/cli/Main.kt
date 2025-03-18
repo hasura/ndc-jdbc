@@ -1,20 +1,20 @@
 package io.hasura.databricks.cli
 
 import io.hasura.databricks.common.*
-import io.hasura.common.Category
-import io.hasura.common.Column
-import io.hasura.common.ColumnType
-import io.hasura.common.Configuration
-import io.hasura.common.ConnectionUri
-import io.hasura.common.DefaultConfiguration
-import io.hasura.common.ForeignKeyInfo
-import io.hasura.common.FunctionInfo
-import io.hasura.common.TableInfo
+import io.hasura.common.configuration.Category
+import io.hasura.common.configuration.Column
+import io.hasura.common.configuration.ColumnType
+import io.hasura.common.configuration.Configuration
+import io.hasura.common.configuration.ConnectionUri
+import io.hasura.common.configuration.DefaultConfiguration
+import io.hasura.common.configuration.ForeignKeyInfo
+import io.hasura.common.configuration.FunctionInfo
+import io.hasura.common.configuration.TableInfo
 import io.hasura.ndc.ir.json
 import kotlinx.cli.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.*
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import java.io.File
@@ -27,15 +27,22 @@ import schemacrawler.schemacrawler.*
 import schemacrawler.tools.utility.SchemaCrawlerUtility;
 import us.fatehi.utility.datasource.*
 import schemacrawler.tools.options.Config
+import io.hasura.common.configuration.Version
 
-interface IConfigGenerator<T : Configuration, U : ColumnType> {
+interface IConfigGenerator<T : Configuration<DatabricksDataType>, U : ColumnType> {
     fun generateConfig(config: T): DefaultConfiguration<U>
 }
 
 data class DatabricksConfiguration(
     override val connectionUri: ConnectionUri,
     val schemas: List<String> = emptyList()
-) : Configuration
+) : Configuration<DatabricksDataType> {
+    override val version = Version.V1
+
+    override fun toDefaultConfiguration(): DefaultConfiguration<DatabricksDataType> {
+        return DatabricksConfigGenerator.generateConfig(this)
+    }
+}
 
 
 object DatabricksConfigGenerator : IConfigGenerator<DatabricksConfiguration, DatabricksDataType> {
@@ -50,6 +57,7 @@ object DatabricksConfigGenerator : IConfigGenerator<DatabricksConfiguration, Dat
         val introspectionResult = introspectSchemas(config)
 
         return DefaultConfiguration(
+            version = config.version,
             connectionUri = config.connectionUri,
             tables = introspectionResult.tables,
             functions = introspectionResult.functions,
@@ -102,7 +110,7 @@ object DatabricksConfigGenerator : IConfigGenerator<DatabricksConfiguration, Dat
                 JOIN information_schema.tables t
                 ON c.table_schema = t.table_schema AND c.table_name = t.table_name
                 WHERE c.table_schema NOT IN ('information_schema', 'sys')
-                ${if (config.schemas.isNotEmpty()) 
+                ${if (config.schemas.isNotEmpty())
                     "AND LOWER(c.table_schema) IN (${config.schemas.joinToString(",") { "'${it.lowercase()}'" }})"
                 else ""}
             ),
@@ -254,10 +262,68 @@ object UpdateCommand : Subcommand("update", "Update configuration file") {
     }
 }
 
+object UpgradeCommand : Subcommand("upgrade", "Upgrade configuration file to V1") {
+    private val configFile by option(
+        ArgType.String,
+        shortName = "c",
+        fullName = "config-file",
+        description = "Path to configuration file to upgrade"
+    ).default("configuration.json")
+
+    private val outfile by option(
+        ArgType.String,
+        shortName = "o",
+        fullName = "outfile",
+        description = "Output file for upgraded configuration"
+    ).default("configuration.json")
+
+    override fun execute() {
+        // Read the existing configuration file
+        val file = java.io.File(configFile)
+        if (!file.exists()) {
+            println("Configuration file not found: $configFile")
+            exitProcess(1)
+        }
+
+        try {
+            // Read the file as a string
+            val jsonString = file.readText()
+
+            // Parse the JSON to check if it has a version field
+            val jsonElement = json.parseToJsonElement(jsonString)
+            val jsonObject = jsonElement.jsonObject
+
+            if (jsonObject["version"]?.jsonPrimitive?.contentOrNull == "v1") {
+                println("Configuration already is on the latest version. No upgrade needed.")
+                exitProcess(0)
+            }
+
+            // Add the version field to the JSON
+            val mutableMap = jsonObject.toMutableMap()
+            mutableMap["version"] = kotlinx.serialization.json.JsonPrimitive("v1")
+
+            // Convert back to JSON string with pretty printing
+            val upgradedJson = Json(json) {
+                prettyPrint = true
+            }.encodeToString(kotlinx.serialization.json.JsonObject(mutableMap))
+
+            // Write the upgraded configuration
+            val outputFile = java.io.File(outfile)
+            outputFile.writeText(upgradedJson)
+
+            println("Successfully upgraded configuration to version v1")
+            exitProcess(0)
+        } catch (e: Exception) {
+            println("Failed to upgrade configuration: ${e.message}")
+            exitProcess(1)
+        }
+    }
+}
+
 @OptIn(ExperimentalCli::class)
 fun main(args: Array<String>) {
-    val parser = ArgParser("update", strictSubcommandOptionsOrder = true)
-    parser.subcommands(UpdateCommand)
+    val parser = ArgParser("databricks-cli", strictSubcommandOptionsOrder = true)
+    parser.subcommands(UpdateCommand, UpgradeCommand)
 
     val modifiedArgs = args.toMutableList()
     val schemasIndex = modifiedArgs.indexOf("--schemas")

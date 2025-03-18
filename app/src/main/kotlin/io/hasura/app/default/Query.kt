@@ -1,7 +1,7 @@
 package io.hasura.app.default
 
 import io.hasura.app.base.*
-import io.hasura.common.*
+import io.hasura.common.configuration.*
 import io.hasura.ndc.connector.*
 import io.hasura.ndc.ir.*
 import kotlinx.serialization.json.JsonArray
@@ -17,6 +17,7 @@ import org.jooq.Query as JooqQuery
 import org.jooq.SQLDialect
 import org.jooq.impl.DSL.*
 import org.jooq.impl.SQLDataType
+
 
 const val variablesCTEName = "vars"
 const val resultsCTEName = "rlts"

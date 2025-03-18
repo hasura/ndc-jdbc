@@ -1,7 +1,6 @@
 package io.hasura.app.default
 
 import io.hasura.app.base.*
-import io.hasura.common.*
 import io.hasura.ndc.connector.*
 import io.hasura.ndc.ir.*
 import io.micrometer.core.instrument.MeterRegistry
@@ -11,6 +10,10 @@ import kotlinx.coroutines.*
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.*
 import kotlinx.serialization.json.Json
+import io.hasura.common.configuration.*
+import io.hasura.common.configuration.version1.ConfigurationV1
+import kotlinx.serialization.builtins.serializer
+
 
 class DefaultState<T : ColumnType>(
     val configuration: DefaultConfiguration<T>,
@@ -21,13 +24,12 @@ open class DefaultConnector<T : ColumnType>(
     private val source: DatabaseSource,
     private val connection: (DefaultConfiguration<T>) -> DatabaseConnection,
     private val schemaGenerator: DefaultSchemaGeneratorClass<T>,
-    private val configSerializer: KSerializer<DefaultConfiguration<T>>,
+    private val sourceColumnSerializer: KSerializer<T>
 ) : Connector<DefaultConfiguration<T>, DefaultState<T>> {
     override suspend fun parseConfiguration(configurationDir: Path): DefaultConfiguration<T> {
-        val configFile = configurationDir.resolve("configuration.json")
         return try {
-            val jsonString = configFile.toFile().readText()
-            Json.decodeFromString(configSerializer, jsonString)
+            ConfigurationParser.parse(configurationDir, sourceColumnSerializer)
+
         } catch (e: Exception) {
             ConnectorLogger.logger.error("Fatal error: Failed to parse configuration file: ${e.message}")
             System.exit(1)

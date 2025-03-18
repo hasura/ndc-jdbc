@@ -1,6 +1,6 @@
 package io.hasura.snowflake.common
 
-import io.hasura.common.ColumnType
+import io.hasura.common.configuration.ColumnType
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.json.JsonClassDiscriminator

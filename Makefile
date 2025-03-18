@@ -1,4 +1,4 @@
-.PHONY: build clean \
+.PHONY: build clean watch \
 	# BigQuery
 	build-bigquery build-bigquery-app build-bigquery-cli \
 	run-bigquery run-bigquery-introspection \
@@ -23,6 +23,9 @@
 build:
 	./gradlew build
 
+watch:
+	./gradlew build --continuous
+
 clean:
 	./gradlew clean
 
@@ -38,7 +41,7 @@ build-bigquery-app:
 	./gradlew :sources:bigquery:app:build
 
 build-bigquery-cli:
-	./gradlew :sources:bigquery:app:build
+	./gradlew :sources:bigquery:cli:build
 
 run-bigquery:
 	OTEL_SERVICE_NAME=ndc-bigquery \

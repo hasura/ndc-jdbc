@@ -2,8 +2,12 @@ package io.hasura.snowflake.app
 
 import io.hasura.app.base.*
 import io.hasura.common.*
+import io.hasura.common.configuration.*
+import io.hasura.snowflake.common.SnowflakeDataType
+import io.hasura.common.configuration.Configuration
 
-class SnowflakeConnection(config: Configuration) : BaseHikariConnection(config) {
+
+class SnowflakeConnection(config: Configuration<SnowflakeDataType>) : BaseHikariConnection<SnowflakeDataType>(config) {
     override fun getDriverConfig(): DatabaseDriver {
         return DatabaseDriver(
             className = "net.snowflake.client.jdbc.SnowflakeDriver"

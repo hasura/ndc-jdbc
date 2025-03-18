@@ -2,13 +2,13 @@ package io.hasura.app.default
 
 import io.hasura.app.base.*
 import io.hasura.ndc.ir.*
-import io.hasura.common.*
+import io.hasura.common.configuration.*
 import org.jooq.Condition
 import org.jooq.DataType
 import org.jooq.Field as JooqField
 import org.jooq.impl.SQLDataType
 
-abstract class DefaultSchemaGeneratorClass<T : ColumnType> : ISchemaGenerator<DefaultConfiguration<T>> {
+abstract class DefaultSchemaGeneratorClass<T : ColumnType> : ISchemaGenerator<T, DefaultConfiguration<T>> {
     override fun getSchema(configuration: DefaultConfiguration<T>): SchemaResponse {
         return SchemaResponse(
             collections = getCollections(configuration),

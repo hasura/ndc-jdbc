@@ -1,6 +1,6 @@
 package io.hasura.bigquery.common
 
-import io.hasura.common.ColumnType
+import io.hasura.common.configuration.ColumnType
 import kotlinx.serialization.*
 import kotlinx.serialization.json.*
 

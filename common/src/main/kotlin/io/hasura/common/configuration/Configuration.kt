@@ -1,4 +1,4 @@
-package io.hasura.common
+package io.hasura.common.configuration
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -16,7 +16,16 @@ data class ConnectionUri(
     }
 }
 
-interface Configuration {
-    @SerialName("connection_uri")
-    val connectionUri: ConnectionUri
+@Serializable
+enum class Version {
+    @SerialName("v1")
+    V1
+}
+
+interface Configuration<T: ColumnType> {
+    @SerialName("version") val version: Version
+
+    @SerialName("connection_uri") val connectionUri: ConnectionUri
+
+    fun toDefaultConfiguration(): DefaultConfiguration<T>
 }
