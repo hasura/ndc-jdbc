@@ -11,6 +11,7 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.JsonArray
 import org.jooq.*
 import org.jooq.Field
+import org.jooq.conf.Settings
 import org.jooq.impl.DSL
 import org.jooq.impl.DSL.*
 
@@ -42,17 +43,17 @@ class SQLConnector<T : ColumnType>(
         println(sql)
 
         return coroutineScope {
-            // val queryExecutor = DefaultConnection(state.client)
-            val emptyRows = JsonArray(emptyList())
-            emptyRows
+            val queryExecutor = DefaultConnection(state.client)
+            queryExecutor.executeSQL(sql)
         }
     }
 }
 
+
 object PlanConverter {
-    fun generateSQL(plan: Plan): String {
-        val dsl = using(SQLDialect.SNOWFLAKE)
-        return createDSLQuery(dsl, plan, "r").toString()
+    fun generateSQL(plan: Plan): Select<*> {
+        val dsl = DSL.using(SQLDialect.DEFAULT, Settings().withRenderFormatted(true))
+        return createDSLQuery(dsl, plan, "r")
     }
 
     private fun createDSLQuery(dsl: DSLContext, plan: Plan, path: String): Select<*> {
@@ -211,14 +212,23 @@ object PlanConverter {
 
         // Add group by fields to the select
         val groupByFields = plan.group_by.mapIndexed { index, expr ->
-            val field = createDSLNode(dsl, expr, innerTable, innerPath, plan.input).`as`(name("${innerPath}_grp_$index"))
+            val field =
+                createDSLNode(dsl, expr, innerTable, innerPath, plan.input).`as`(name("${innerPath}_grp_$index"))
             selectFields.add(field)
             field
         }
 
         // Add aggregate expressions to the select
         plan.aggregates.forEachIndexed { index, expr ->
-            selectFields.add(createDSLAggregateExpression(dsl, expr, innerTable, innerPath, plan.input).`as`(name("${innerPath}_agg_$index")))
+            selectFields.add(
+                createDSLAggregateExpression(
+                    dsl,
+                    expr,
+                    innerTable,
+                    innerPath,
+                    plan.input
+                ).`as`(name("${innerPath}_agg_$index"))
+            )
         }
 
         return dsl.select(selectFields)
@@ -226,7 +236,13 @@ object PlanConverter {
             .groupBy(groupByFields)
     }
 
-    private fun createDSLNode(dsl: DSLContext, expr: PlanExpression, table: Table<*>, path: String, parentPlan: Plan): Field<*> {
+    private fun createDSLNode(
+        dsl: DSLContext,
+        expr: PlanExpression,
+        table: Table<*>,
+        path: String,
+        parentPlan: Plan
+    ): Field<*> {
         return when (expr) {
             is PlanExpression.Column -> {
                 // Column references the index in the table
@@ -475,7 +491,13 @@ object PlanConverter {
         }
     }
 
-    private fun createDSLAggregateExpression(dsl: DSLContext, expr: PlanExpression, table: Table<*>, path: String, parentPlan: Plan): Field<*> {
+    private fun createDSLAggregateExpression(
+        dsl: DSLContext,
+        expr: PlanExpression,
+        table: Table<*>,
+        path: String,
+        parentPlan: Plan
+    ): Field<*> {
         return when (expr) {
             is PlanExpression.Count -> {
                 DSL.count(createDSLNode(dsl, expr.expr, table, path, parentPlan))
@@ -544,7 +566,13 @@ object PlanConverter {
     /**
      * Helper method to ensure we get a Condition from an expression
      */
-    private fun createDSLCondition(dsl: DSLContext, expr: PlanExpression, table: Table<*>, path: String, parentPlan: Plan): Condition {
+    private fun createDSLCondition(
+        dsl: DSLContext,
+        expr: PlanExpression,
+        table: Table<*>,
+        path: String,
+        parentPlan: Plan
+    ): Condition {
         return createDSLNode(dsl, expr, table, path, parentPlan) as Condition
     }
 }

@@ -1,10 +1,13 @@
 package io.hasura.app.default
 
-import io.hasura.app.base.*
+import io.hasura.app.base.DatabaseConnection
 import io.hasura.app.util.JsonUtils
-import io.hasura.ndc.connector.*
-import kotlinx.serialization.json.*
-import org.jooq.Record
+import io.hasura.ndc.connector.ConnectorLogger
+import io.hasura.ndc.connector.Telemetry
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 import org.jooq.ResultQuery
 import org.jooq.impl.DSL
 
@@ -53,8 +56,7 @@ class DefaultConnection(
                     val stmt = ctx.renderInlined(sql)
                     ConnectorLogger.logger.debug("SQL: $stmt")
 
-                    val results = ctx.fetch(stmt).intoMaps()
-
+                    val results = ctx.fetch(sql).intoMaps()
                     JsonUtils.listToJsonArray(results)
                 }
             }
