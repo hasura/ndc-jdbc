@@ -3,6 +3,7 @@ package io.hasura.app.default
 import io.hasura.app.base.*
 import io.hasura.ndc.ir.*
 import io.hasura.common.configuration.*
+import org.jooq.Condition
 import org.jooq.DataType
 import org.jooq.Field as JooqField
 import org.jooq.impl.SQLDataType
@@ -48,6 +49,18 @@ abstract class DefaultSchemaGeneratorClass<T : ColumnType> : ISchemaGenerator<T,
         field: JooqField<*>,
         columnType: T?
     ): JooqField<*>
+
+    abstract fun handleRegexComparison(
+        field: JooqField<*>,
+        compareWith: JooqField<*>,
+        isCaseInsensitive: Boolean
+    ): Condition
+
+    abstract fun handleLikeComparison(
+        field: JooqField<*>,
+        compareWith: JooqField<*>,
+        isCaseInsensitive: Boolean
+    ): Condition
 
     open fun getCollections(configuration: DefaultConfiguration<T>): List<CollectionInfo> {
         return configuration.tables.map { table ->

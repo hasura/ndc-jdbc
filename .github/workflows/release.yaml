@@ -6,6 +6,7 @@ on:
       - "bigquery/v*"
       - "databricks/v*"
       - "snowflake/v*"
+      - "redshift/v*"
 
 jobs:
   build-connector:

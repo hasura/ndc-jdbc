@@ -6,6 +6,7 @@ plugins {
 dependencies {
     // Hasura NDC Kotlin SDK
     implementation(libs.ndc.sdk.kotlin)
+    implementation(libs.kotlinx.serialization.json)
     implementation(project(":common"))
 
     // Jooq

@@ -1,5 +1,5 @@
 {
-  "collection": "albums",
+  "collection": "chinook.public.albums",
   "query": {
     "fields": {},
     "predicate": {
@@ -12,7 +12,13 @@
       "operator": "_in",
       "value": {
         "type": "scalar",
-        "value": [1,2,3,4,5]
+        "value": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
       }
     }
   },
