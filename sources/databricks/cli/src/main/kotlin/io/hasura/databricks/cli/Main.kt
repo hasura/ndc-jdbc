@@ -293,8 +293,8 @@ object UpgradeCommand : Subcommand("upgrade", "Upgrade configuration file to V1"
             val jsonElement = json.parseToJsonElement(jsonString)
             val jsonObject = jsonElement.jsonObject
 
-            if (jsonObject.containsKey("version")) {
-                println("Configuration already has a version field. No upgrade needed.")
+            if (jsonObject["version"]?.jsonPrimitive?.contentOrNull == "v1") {
+                println("Configuration already is on the latest version. No upgrade needed.")
                 exitProcess(0)
             }
 
