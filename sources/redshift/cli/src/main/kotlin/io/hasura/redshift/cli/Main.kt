@@ -14,7 +14,7 @@ import io.hasura.common.configuration.Version
 import io.hasura.ndc.ir.json
 import kotlinx.cli.*
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.*
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import java.io.File
@@ -255,10 +255,71 @@ object UpdateCommand : Subcommand("update", "Update configuration file") {
     }
 }
 
+
+object UpgradeCommand : Subcommand("upgrade", "Upgrade configuration file to V1") {
+    private val configFile by option(
+        ArgType.String,
+        shortName = "c",
+        fullName = "config-file",
+        description = "Path to configuration file to upgrade"
+    ).default("configuration.json")
+
+    private val outfile by option(
+        ArgType.String,
+        shortName = "o",
+        fullName = "outfile",
+        description = "Output file for upgraded configuration"
+    ).default("configuration.json")
+
+    override fun execute() {
+        // Read the existing configuration file
+        val file = java.io.File(configFile)
+        if (!file.exists()) {
+            println("Configuration file not found: $configFile")
+            exitProcess(1)
+        }
+
+        try {
+            // Read the file as a string
+            val jsonString = file.readText()
+
+            // Parse the JSON to check if it has a version field
+            val jsonElement = json.parseToJsonElement(jsonString)
+            val jsonObject = jsonElement.jsonObject
+
+            if (jsonObject.containsKey("version")) {
+                println("Configuration already has a version field. No upgrade needed.")
+                exitProcess(0)
+            }
+
+            // Add the version field to the JSON
+            val mutableMap = jsonObject.toMutableMap()
+            mutableMap["version"] = kotlinx.serialization.json.JsonPrimitive("v1")
+
+            // Convert back to JSON string with pretty printing
+            val upgradedJson = Json(json) {
+                prettyPrint = true
+            }.encodeToString(kotlinx.serialization.json.JsonObject(mutableMap))
+
+            // Write the upgraded configuration
+            val outputFile = java.io.File(outfile)
+            outputFile.writeText(upgradedJson)
+
+            println("Successfully upgraded configuration to version v1")
+            exitProcess(0)
+        } catch (e: Exception) {
+            println("Failed to upgrade configuration: ${e.message}")
+            exitProcess(1)
+        }
+    }
+}
+
+
+
 @OptIn(ExperimentalCli::class)
 fun main(args: Array<String>) {
-    val parser = ArgParser("update", strictSubcommandOptionsOrder = true)
-    parser.subcommands(UpdateCommand)
+    val parser = ArgParser("redshift-cli", strictSubcommandOptionsOrder = true)
+    parser.subcommands(UpdateCommand, UpgradeCommand)
 
     val modifiedArgs = args.toMutableList()
     val schemasIndex = modifiedArgs.indexOf("--schemas")

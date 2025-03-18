@@ -67,7 +67,8 @@ object ConfigurationParser {
         val version = determineVersion(jsonString)
 
         return when (version) {
-            null, ConfigVersion.V1 -> {
+            null -> throw IllegalArgumentException("Configuration version not found. Please upgrade your configuration using the `upgrade` CLI command")
+            ConfigVersion.V1 -> {
 
                 val configV1 = json.decodeFromString(ConfigurationV1.serializer(serializer), jsonString)
                 configV1.toDefaultConfiguration()
@@ -100,7 +101,7 @@ object ConfigurationParser {
         } catch (e: Exception) {
             when (e) {
                 is IllegalArgumentException -> throw e
-                else -> throw IllegalArgumentException("Failed to determine configuration version: ${e.message}")
+                else -> throw IllegalArgumentException("Failed to determine configuration version: ${e.message}", e)
             }
         }
     }

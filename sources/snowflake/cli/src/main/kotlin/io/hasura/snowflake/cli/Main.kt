@@ -8,6 +8,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.jooq.impl.DSL
 import kotlin.system.exitProcess
+import kotlinx.serialization.json.*
 
 interface IConfigGenerator<T : Configuration<U>, U : ColumnType> {
     fun generateConfig(config: T): DefaultConfiguration<U>
@@ -192,6 +193,65 @@ object SnowflakeConfigGenerator : IConfigGenerator<SnowflakeConfiguration, Snowf
 }
 
 @OptIn(ExperimentalCli::class)
+class UpgradeCommand : Subcommand("upgrade", "Upgrade configuration file to V1") {
+    private val configFile by option(
+        ArgType.String,
+        shortName = "c",
+        fullName = "config-file",
+        description = "Path to configuration file to upgrade"
+    ).default("configuration.json")
+
+    private val outfile by option(
+        ArgType.String,
+        shortName = "o",
+        fullName = "outfile",
+        description = "Output file for upgraded configuration"
+    ).default("configuration.json")
+
+    override fun execute() {
+        // Read the existing configuration file
+        val file = java.io.File(configFile)
+        if (!file.exists()) {
+            println("Configuration file not found: $configFile")
+            exitProcess(1)
+        }
+
+        try {
+            // Read the file as a string
+            val jsonString = file.readText()
+
+            // Parse the JSON to check if it has a version field
+            val jsonElement = json.parseToJsonElement(jsonString)
+            val jsonObject = jsonElement.jsonObject
+
+            if (jsonObject.containsKey("version")) {
+                println("Configuration already has a version field. No upgrade needed.")
+                exitProcess(0)
+            }
+
+            // Add the version field to the JSON
+            val mutableMap = jsonObject.toMutableMap()
+            mutableMap["version"] = kotlinx.serialization.json.JsonPrimitive("v1")
+
+            // Convert back to JSON string with pretty printing
+            val upgradedJson = Json(json) {
+                prettyPrint = true
+            }.encodeToString(kotlinx.serialization.json.JsonObject(mutableMap))
+
+            // Write the upgraded configuration
+            val outputFile = java.io.File(outfile)
+            outputFile.writeText(upgradedJson)
+
+            println("Successfully upgraded configuration to version v1")
+            exitProcess(0)
+        } catch (e: Exception) {
+            println("Failed to upgrade configuration: ${e.message}")
+            exitProcess(1)
+        }
+    }
+}
+
+@OptIn(ExperimentalCli::class)
 class UpdateCommand : Subcommand("update", "Update configuration file") {
     private val jdbcUrl by option(
         ArgType.String,
@@ -250,8 +310,10 @@ class UpdateCommand : Subcommand("update", "Update configuration file") {
 }
 
 fun main(args: Array<String>) {
-    val parser = ArgParser("update", strictSubcommandOptionsOrder = true)
-    parser.subcommands(UpdateCommand())
+    val parser = ArgParser("snowflake-cli", strictSubcommandOptionsOrder = true)
+
+    parser.subcommands(UpdateCommand(), UpgradeCommand())
+
 
     val modifiedArgs = args.toMutableList()
     val schemasIndex = modifiedArgs.indexOf("--schemas")
