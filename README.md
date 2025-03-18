@@ -35,17 +35,29 @@ export JOOQ_PRO_LICENSE="<jooq_pro_license>"
 
 ## Usage
 
-1. Set the required environment variable to specify your database:
+1. Set environment variable to specify your database and connection pool settings:
 
 ```bash
-export NDC_JDBC_SOURCE=snowflake
+export JDBC_URL="jdbc:snowflake://..."
+# Default connection pool settings you can override with env vars or in configuration.json shown below
+export CONNECTION_POOL_MAX_SIZE=10
+export CONNECTION_POOL_MIN_IDLE=1
+export CONNECTION_POOL_TIMEOUT=30000
+export CONNECTION_POOL_INITIALIZATION_FAIL_TIMEOUT=30000
 ```
 
 2. Create a configuration file (`configuration.json`) with your connection details:
+
 ```json
 {
   "connection_uri": {
     "value": "jdbc:snowflake://..."  // or use "variable" for env var
+  },
+  "connectionPoolSize": {
+    "max_connections": 10,
+    "min_idle": 1,
+    "connection_timeout": 30000,
+    "initialization_fail_timeout": 30000
   },
   "schemas": ["public"],
   "tables": [...]
@@ -70,6 +82,7 @@ The connector is built with a modular architecture:
   - `redshift/`
 
 Each database implementation provides:
+
 - Custom connection configuration
 - Type mapping
 - Schema generation
@@ -97,6 +110,7 @@ The repository includes automated testing infrastructure for validating NDC func
 #### GitHub Actions CI
 
 Tests automatically run on pull requests targeting the main branch. The workflow:
+
 1. Generates connector configuration
 2. Starts the connector service
 3. Runs NDC test suite against the running connector

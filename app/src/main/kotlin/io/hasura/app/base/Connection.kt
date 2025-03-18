@@ -39,13 +39,26 @@ abstract class BaseHikariConnection(protected val config: Configuration) : Datab
     }
 
     private fun createBaseHikariConfig(className: String): HikariConfig {
+        val poolMaxSize = System.getenv("CONNECTION_POOL_MAX_SIZE")?.toIntOrNull()
+            ?: config.connectionPoolSettings?.maxConnections
+            ?: 10
+        val poolMinIdle = System.getenv("CONNECTION_POOL_MIN_IDLE")?.toIntOrNull()
+            ?: config.connectionPoolSettings?.minIdle
+            ?: 1
+        val poolConnectionTimeout = (System.getenv("CONNECTION_POOL_TIMEOUT")?.toLongOrNull()
+            ?: config.connectionPoolSettings?.connectionTimeout
+            ?: 30000L).toLong()
+        val poolFailTimeout = (System.getenv("CONNECTION_POOL_INITIALIZATION_FAIL_TIMEOUT")?.toLongOrNull()
+            ?: config.connectionPoolSettings?.initializationFailTimeout
+            ?: 30000L).toLong()
+
         return HikariConfig().apply {
             this.driverClassName = className
             jdbcUrl = config.connectionUri.resolve()
-            maximumPoolSize = 10
-            minimumIdle = 1
-            connectionTimeout = 30000L
-            initializationFailTimeout = 30000L
+            maximumPoolSize = poolMaxSize
+            minimumIdle = poolMinIdle
+            connectionTimeout = poolConnectionTimeout
+            initializationFailTimeout = poolFailTimeout
         }
     }
 
@@ -79,4 +92,4 @@ abstract class BaseHikariConnection(protected val config: Configuration) : Datab
             connection.close()
         }
     }
-} 
+}

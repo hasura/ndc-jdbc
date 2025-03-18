@@ -7,6 +7,8 @@ import kotlinx.serialization.Serializable
 data class DefaultConfiguration<T : ColumnType>(
     @SerialName("connection_uri")
     override val connectionUri: ConnectionUri,
+    @SerialName("connection_pool_settings")
+    override val connectionPoolSettings: ConnectionPoolSettings? = ConnectionPoolSettings(10, 1, 30000L, 30000L),
     val schemas: List<String> = emptyList(),
     val tables: List<TableInfo<T>> = emptyList(),
     val functions: List<FunctionInfo> = emptyList(),
