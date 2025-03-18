@@ -8,7 +8,7 @@ x-hasura-ndc-version: 0.1.6
     "input": {
       "type": "Project",
       "input": {
-        "type": "Filter",
+        "type": "Limit",
         "input": {
           "type": "From",
           "collection": "ARTIST",
@@ -17,20 +17,8 @@ x-hasura-ndc-version: 0.1.6
             "NAME"
           ]
         },
-        "predicate": {
-          "type": "Lt",
-          "left": {
-            "type": "Column",
-            "index": 0
-          },
-          "right": {
-            "type": "Literal",
-            "literal": {
-              "type": "Int32",
-              "value": 10
-            }
-          }
-        }
+        "fetch": 2,
+        "skip": 0
       },
       "exprs": [
         {

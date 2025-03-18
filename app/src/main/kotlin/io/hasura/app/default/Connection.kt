@@ -56,8 +56,8 @@ class DefaultConnection(
                     val stmt = ctx.renderInlined(sql)
                     ConnectorLogger.logger.debug("SQL: $stmt")
 
-                    val results = ctx.fetch(sql).intoMaps()
-                    JsonUtils.listToJsonArray(results)
+                    val arrays = ctx.fetch(sql).intoArrays()
+                    JsonUtils.listToJsonArray(arrays.toList())
                 }
             }
         }
