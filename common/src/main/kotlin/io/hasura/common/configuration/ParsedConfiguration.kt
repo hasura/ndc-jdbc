@@ -67,7 +67,7 @@ object ConfigurationParser {
         val version = determineVersion(jsonString)
 
         return when (version) {
-            ConfigVersion.V1 -> {
+            null, ConfigVersion.V1 -> {
 
                 val configV1 = json.decodeFromString(ConfigurationV1.serializer(serializer), jsonString)
                 configV1.toDefaultConfiguration()
@@ -79,18 +79,21 @@ object ConfigurationParser {
     /**
      * Determine the version from the JSON string
      */
-    internal fun determineVersion(jsonString: String): ConfigVersion {
+    internal fun determineVersion(jsonString: String): ConfigVersion? {
         return try {
             // Create a JSON element from the string
             val jsonElement = json.parseToJsonElement(jsonString)
 
             // Extract the version field
             val versionString = jsonElement.jsonObject["version"]?.jsonPrimitive?.contentOrNull
-                ?: throw IllegalArgumentException("Missing or invalid 'version' field in configuration")
 
             // Parse directly to the enum
             try {
-                json.decodeFromString<ConfigVersion>("\"$versionString\"")
+                if (versionString == null) {
+                  return null
+                } else {
+                    json.decodeFromString<ConfigVersion?>("\"$versionString\"")
+                }
             } catch (e: SerializationException) {
                 throw IllegalArgumentException("Unsupported configuration version: $versionString")
             }
