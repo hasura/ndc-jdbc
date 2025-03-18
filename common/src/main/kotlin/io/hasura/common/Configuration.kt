@@ -16,7 +16,22 @@ data class ConnectionUri(
     }
 }
 
+@Serializable
+data class ConnectionPoolSettings(
+    @SerialName("max_connections")
+    val maxConnections: Int,
+    @SerialName("min_idle")
+    val minIdle: Int,
+    @SerialName("connection_timeout")
+    val connectionTimeout: Long,
+    @SerialName("initialization_fail_timeout")
+    val initializationFailTimeout: Long
+)
+
 interface Configuration {
     @SerialName("connection_uri")
     val connectionUri: ConnectionUri
+    @SerialName("connection_pool_settings")
+    val connectionPoolSettings: ConnectionPoolSettings?
+        get() = ConnectionPoolSettings(10, 1, 30000L, 30000L)
 }
