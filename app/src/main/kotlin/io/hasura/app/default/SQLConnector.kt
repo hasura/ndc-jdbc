@@ -52,37 +52,39 @@ class SQLConnector<T : ColumnType>(
 object PlanConverter {
     fun generateSQL(plan: Plan): String {
         val dsl = using(SQLDialect.SNOWFLAKE)
-        return createDSLQuery(dsl, plan).toString()
+        return createDSLQuery(dsl, plan, "r").toString()
     }
 
-    private fun createDSLQuery(dsl: DSLContext, plan: Plan): Select<*> {
+    private fun createDSLQuery(dsl: DSLContext, plan: Plan, path: String): Select<*> {
         return when (plan) {
-            is Plan.From -> createFromQuery(dsl, plan)
-            is Plan.Limit -> createLimitQuery(dsl, plan)
-            is Plan.Project -> createProjectQuery(dsl, plan)
-            is Plan.Filter -> createFilterQuery(dsl, plan)
-            is Plan.Sort -> createSortQuery(dsl, plan)
-            is Plan.Distinct -> createDistinctQuery(dsl, plan)
-            is Plan.DistinctOn -> createDistinctOnQuery(dsl, plan)
-            is Plan.Join -> createJoinQuery(dsl, plan)
-            is Plan.Aggregate -> createAggregateQuery(dsl, plan)
+            is Plan.From -> createFromQuery(dsl, plan, path)
+            is Plan.Limit -> createLimitQuery(dsl, plan, path)
+            is Plan.Project -> createProjectQuery(dsl, plan, path)
+            is Plan.Filter -> createFilterQuery(dsl, plan, path)
+            is Plan.Sort -> createSortQuery(dsl, plan, path)
+            is Plan.Distinct -> createDistinctQuery(dsl, plan, path)
+            is Plan.DistinctOn -> createDistinctOnQuery(dsl, plan, path)
+            is Plan.Join -> createJoinQuery(dsl, plan, path)
+            is Plan.Aggregate -> createAggregateQuery(dsl, plan, path)
         }
     }
 
-    private fun createFromQuery(dsl: DSLContext, plan: Plan.From): Select<*> {
+    private fun createFromQuery(dsl: DSLContext, plan: Plan.From, path: String): Select<*> {
         val table = table(name(plan.collection))
+        val prefix = "${path}f"
 
         return dsl.select(
             plan.columns.mapIndexed { index, column ->
-                field(name(column)).`as`(name("column_$index"))
+                field(name(column)).`as`(name("${prefix}_col_$index"))
             }
         ).from(table)
     }
 
-    private fun createLimitQuery(dsl: DSLContext, plan: Plan.Limit): Select<*> {
-        val innerQuery = createDSLQuery(dsl, plan.input)
+    private fun createLimitQuery(dsl: DSLContext, plan: Plan.Limit, path: String): Select<*> {
+        val innerPath = "${path}l"
+        val innerQuery = createDSLQuery(dsl, plan.input, innerPath)
 
-        var query = dsl.select().from(innerQuery.asTable("limit"))
+        var query = dsl.select().from(innerQuery.asTable("t$innerPath"))
 
         return if (plan.fetch != null) {
             query.limit(plan.fetch).offset(plan.skip)
@@ -91,35 +93,38 @@ object PlanConverter {
         }
     }
 
-    private fun createProjectQuery(dsl: DSLContext, plan: Plan.Project): Select<*> {
-        val innerQuery = createDSLQuery(dsl, plan.input)
-        val innerTable = innerQuery.asTable("project")
+    private fun createProjectQuery(dsl: DSLContext, plan: Plan.Project, path: String): Select<*> {
+        val innerPath = "${path}p"
+        val innerQuery = createDSLQuery(dsl, plan.input, innerPath)
+        val innerTable = innerQuery.asTable("t$innerPath")
 
         return dsl.select(
             plan.exprs.mapIndexed { index, expr ->
-                createDSLNode(dsl, expr, innerTable).`as`(name("column_$index"))
+                createDSLNode(dsl, expr, innerTable, innerPath, plan.input).`as`(name("${innerPath}_col_$index"))
             }
         ).from(innerTable)
     }
 
-    private fun createFilterQuery(dsl: DSLContext, plan: Plan.Filter): Select<*> {
-        val innerQuery = createDSLQuery(dsl, plan.input)
-        val innerTable = innerQuery.asTable("filter")
+    private fun createFilterQuery(dsl: DSLContext, plan: Plan.Filter, path: String): Select<*> {
+        val innerPath = "${path}f"
+        val innerQuery = createDSLQuery(dsl, plan.input, innerPath)
+        val innerTable = innerQuery.asTable("t$innerPath")
 
         return dsl.select()
             .from(innerTable)
-            .where(createDSLCondition(dsl, plan.predicate, innerTable))
+            .where(createDSLCondition(dsl, plan.predicate, innerTable, innerPath, plan.input))
     }
 
-    private fun createSortQuery(dsl: DSLContext, plan: Plan.Sort): Select<*> {
-        val innerQuery = createDSLQuery(dsl, plan.input)
-        val innerTable = innerQuery.asTable("sort")
+    private fun createSortQuery(dsl: DSLContext, plan: Plan.Sort, path: String): Select<*> {
+        val innerPath = "${path}s"
+        val innerQuery = createDSLQuery(dsl, plan.input, innerPath)
+        val innerTable = innerQuery.asTable("t$innerPath")
 
         var query = dsl.select().from(innerTable)
 
         return query.orderBy(
             plan.exprs.map { sortExpr ->
-                val field = createDSLNode(dsl, sortExpr.expr, innerTable)
+                val field = createDSLNode(dsl, sortExpr.expr, innerTable, innerPath, plan.input)
                 if (sortExpr.asc) {
                     if (sortExpr.nulls_first) field.asc().nullsFirst() else field.asc().nullsLast()
                 } else {
@@ -129,46 +134,56 @@ object PlanConverter {
         )
     }
 
-    private fun createDistinctQuery(dsl: DSLContext, plan: Plan.Distinct): Select<*> {
-        val innerQuery = createDSLQuery(dsl, plan.input)
-        val innerTable = innerQuery.asTable("distinct")
+    private fun createDistinctQuery(dsl: DSLContext, plan: Plan.Distinct, path: String): Select<*> {
+        val innerPath = "${path}d"
+        val innerQuery = createDSLQuery(dsl, plan.input, innerPath)
+        val innerTable = innerQuery.asTable("t$innerPath")
 
         return dsl.selectDistinct().from(innerTable)
     }
 
-    private fun createDistinctOnQuery(dsl: DSLContext, plan: Plan.DistinctOn): Select<*> {
-        val innerQuery = createDSLQuery(dsl, plan.input)
-        val innerTable = innerQuery.asTable("distinct_on")
-
-        // jOOQ doesn't directly support DISTINCT ON, so we need to work around it
-        // This is a simplified approach using GROUP BY
-        val selectFields = mutableListOf<SelectField<*>>()
+    private fun createDistinctOnQuery(dsl: DSLContext, plan: Plan.DistinctOn, path: String): Select<*> {
+        val innerPath = "${path}do"
+        val innerQuery = createDSLQuery(dsl, plan.input, innerPath)
+        val innerTable = innerQuery.asTable("t$innerPath")
 
         // Add the distinct-on fields
         val distinctOnFields = plan.exprs.map { expr ->
-            createDSLNode(dsl, expr, innerTable)
+            createDSLNode(dsl, expr, innerTable, innerPath, plan.input)
         }
 
+        // Include all columns from inner query
+        val selectFields = mutableListOf<SelectField<*>>()
         selectFields.addAll(distinctOnFields)
 
-        // Include all columns from inner query
+        // Add all fields to both SELECT and GROUP BY
+        val groupByFields = mutableListOf<Field<*>>()
+        groupByFields.addAll(distinctOnFields.map { it as Field<*> })
+
         for (field in innerTable.fields()) {
             if (!selectFields.contains(field)) {
-                // Cast the field to SelectField<*>
+                // Add to SELECT
                 selectFields.add(field as SelectField<*>)
+                // Add to GROUP BY
+                groupByFields.add(field as Field<*>)
             }
         }
 
         return dsl.select(selectFields)
             .from(innerTable)
-            .groupBy(distinctOnFields)
+            .groupBy(groupByFields)
     }
 
-    private fun createJoinQuery(dsl: DSLContext, plan: Plan.Join): Select<*> {
-        val leftQuery = createDSLQuery(dsl, plan.left)
-        val rightQuery = createDSLQuery(dsl, plan.right)
-        val leftTable = leftQuery.asTable("left_t")
-        val rightTable = rightQuery.asTable("right_t")
+    private fun createJoinQuery(dsl: DSLContext, plan: Plan.Join, path: String): Select<*> {
+        // For joins, we need different path identifiers for left and right branches
+        val leftPath = "${path}jl"
+        val rightPath = "${path}jr"
+
+        val leftQuery = createDSLQuery(dsl, plan.left, leftPath)
+        val rightQuery = createDSLQuery(dsl, plan.right, rightPath)
+
+        val leftTable = leftQuery.asTable("t${leftPath}_left")
+        val rightTable = rightQuery.asTable("t${rightPath}_right")
 
         // Start with a join
         var joinStep = when (plan.join_type) {
@@ -179,30 +194,31 @@ object PlanConverter {
         }
 
         val joinFields = plan.on.fold(trueCondition() as Condition) { acc, joinOn ->
-            val leftExpr = createDSLNode(dsl, joinOn.left, leftTable) as Field<Any>
-            val rightExpr = createDSLNode(dsl, joinOn.right, rightTable) as Field<Any>
+            val leftExpr = createDSLNode(dsl, joinOn.left, leftTable, leftPath, plan.left) as Field<Any>
+            val rightExpr = createDSLNode(dsl, joinOn.right, rightTable, rightPath, plan.right) as Field<Any>
             acc.and(leftExpr.eq(rightExpr))
         }
 
         return joinStep.on(joinFields)
     }
 
-    private fun createAggregateQuery(dsl: DSLContext, plan: Plan.Aggregate): Select<*> {
-        val innerQuery = createDSLQuery(dsl, plan.input)
-        val innerTable = innerQuery.asTable("t")
+    private fun createAggregateQuery(dsl: DSLContext, plan: Plan.Aggregate, path: String): Select<*> {
+        val innerPath = "${path}a"
+        val innerQuery = createDSLQuery(dsl, plan.input, innerPath)
+        val innerTable = innerQuery.asTable("t$innerPath")
 
         val selectFields = mutableListOf<SelectField<*>>()
 
         // Add group by fields to the select
         val groupByFields = plan.group_by.mapIndexed { index, expr ->
-            val field = createDSLNode(dsl, expr, innerTable).`as`(name("group_$index"))
+            val field = createDSLNode(dsl, expr, innerTable, innerPath, plan.input).`as`(name("${innerPath}_grp_$index"))
             selectFields.add(field)
             field
         }
 
         // Add aggregate expressions to the select
         plan.aggregates.forEachIndexed { index, expr ->
-            selectFields.add(createDSLAggregateExpression(dsl, expr, innerTable).`as`(name("agg_$index")))
+            selectFields.add(createDSLAggregateExpression(dsl, expr, innerTable, innerPath, plan.input).`as`(name("${innerPath}_agg_$index")))
         }
 
         return dsl.select(selectFields)
@@ -210,12 +226,24 @@ object PlanConverter {
             .groupBy(groupByFields)
     }
 
-    private fun createDSLNode(dsl: DSLContext, expr: PlanExpression, table: Table<*>): Field<*> {
+    private fun createDSLNode(dsl: DSLContext, expr: PlanExpression, table: Table<*>, path: String, parentPlan: Plan): Field<*> {
         return when (expr) {
             is PlanExpression.Column -> {
                 // Column references the index in the table
-                // Force non-null return with !! or provide a default field
-                table.field(expr.index) ?: field(DSL.name("column_${expr.index}"))
+                // For column references, we need to use the plan-type specific column name format
+                val columnPrefix = when (parentPlan) {
+                    is Plan.From -> "f"
+                    is Plan.Project -> "p"
+                    is Plan.Filter -> "f"
+                    is Plan.Sort -> "s"
+                    is Plan.Limit -> "l"
+                    is Plan.Distinct -> "d"
+                    is Plan.DistinctOn -> "do"
+                    is Plan.Join -> "j"
+                    is Plan.Aggregate -> "a"
+                }
+
+                table.field(expr.index) ?: field(name("${columnPrefix}${path}_col_${expr.index}"))
             }
 
             is PlanExpression.PlanLiteral -> {
@@ -252,169 +280,168 @@ object PlanConverter {
 
             // Binary operators
             is PlanExpression.And -> {
-                val left = createDSLCondition(dsl, expr.left, table)
-                val right = createDSLCondition(dsl, expr.right, table)
+                val left = createDSLCondition(dsl, expr.left, table, path, parentPlan)
+                val right = createDSLCondition(dsl, expr.right, table, path, parentPlan)
                 left.and(right)
             }
 
             is PlanExpression.Or -> {
-                val left = createDSLCondition(dsl, expr.left, table)
-                val right = createDSLCondition(dsl, expr.right, table)
+                val left = createDSLCondition(dsl, expr.left, table, path, parentPlan)
+                val right = createDSLCondition(dsl, expr.right, table, path, parentPlan)
                 left.or(right)
             }
 
             is PlanExpression.Eq -> {
-                val left = createDSLNode(dsl, expr.left, table) as Field<Any>
-                val right = createDSLNode(dsl, expr.right, table)
+                val left = createDSLNode(dsl, expr.left, table, path, parentPlan) as Field<Any>
+                val right = createDSLNode(dsl, expr.right, table, path, parentPlan)
                 left.eq(right)
             }
 
             is PlanExpression.NotEq -> {
-                val left = createDSLNode(dsl, expr.left, table) as Field<Any>
-                val right = createDSLNode(dsl, expr.right, table)
+                val left = createDSLNode(dsl, expr.left, table, path, parentPlan) as Field<Any>
+                val right = createDSLNode(dsl, expr.right, table, path, parentPlan)
                 left.notEqual(right)
             }
 
             is PlanExpression.Lt -> {
-                val left = createDSLNode(dsl, expr.left, table) as Field<Any>
-                val right = createDSLNode(dsl, expr.right, table)
+                val left = createDSLNode(dsl, expr.left, table, path, parentPlan) as Field<Any>
+                val right = createDSLNode(dsl, expr.right, table, path, parentPlan)
                 left.lt(right)
             }
 
             is PlanExpression.LtEq -> {
-                val left = createDSLNode(dsl, expr.left, table) as Field<Any>
-                val right = createDSLNode(dsl, expr.right, table)
+                val left = createDSLNode(dsl, expr.left, table, path, parentPlan) as Field<Any>
+                val right = createDSLNode(dsl, expr.right, table, path, parentPlan)
                 left.lessOrEqual(right)
             }
 
             is PlanExpression.Gt -> {
-                val left = createDSLNode(dsl, expr.left, table) as Field<Any>
-                val right = createDSLNode(dsl, expr.right, table)
+                val left = createDSLNode(dsl, expr.left, table, path, parentPlan) as Field<Any>
+                val right = createDSLNode(dsl, expr.right, table, path, parentPlan)
                 left.gt(right)
             }
 
             is PlanExpression.GtEq -> {
-                val left = createDSLNode(dsl, expr.left, table) as Field<Any>
-                val right = createDSLNode(dsl, expr.right, table)
+                val left = createDSLNode(dsl, expr.left, table, path, parentPlan) as Field<Any>
+                val right = createDSLNode(dsl, expr.right, table, path, parentPlan)
                 left.greaterOrEqual(right)
             }
 
             is PlanExpression.Plus -> {
-                val left = createDSLNode(dsl, expr.left, table)
-                val right = createDSLNode(dsl, expr.right, table)
+                val left = createDSLNode(dsl, expr.left, table, path, parentPlan)
+                val right = createDSLNode(dsl, expr.right, table, path, parentPlan)
                 left.plus(right)
             }
 
             is PlanExpression.Minus -> {
-                val left = createDSLNode(dsl, expr.left, table)
-                val right = createDSLNode(dsl, expr.right, table)
+                val left = createDSLNode(dsl, expr.left, table, path, parentPlan)
+                val right = createDSLNode(dsl, expr.right, table, path, parentPlan)
                 left.minus(right)
             }
 
             is PlanExpression.Multiply -> {
-                val left = createDSLNode(dsl, expr.left, table)
-                val right = createDSLNode(dsl, expr.right, table) as Field<Number>
+                val left = createDSLNode(dsl, expr.left, table, path, parentPlan)
+                val right = createDSLNode(dsl, expr.right, table, path, parentPlan) as Field<Number>
                 left.multiply(right)
             }
 
             is PlanExpression.Divide -> {
-                val left = createDSLNode(dsl, expr.left, table)
-                val right = createDSLNode(dsl, expr.right, table) as Field<Number>
+                val left = createDSLNode(dsl, expr.left, table, path, parentPlan)
+                val right = createDSLNode(dsl, expr.right, table, path, parentPlan) as Field<Number>
                 left.div(right)
             }
 
             is PlanExpression.Modulo -> {
-                val left = createDSLNode(dsl, expr.left, table)
-                val right = createDSLNode(dsl, expr.right, table) as Field<Number>
+                val left = createDSLNode(dsl, expr.left, table, path, parentPlan)
+                val right = createDSLNode(dsl, expr.right, table, path, parentPlan) as Field<Number>
                 left.mod(right)
             }
 
             // Unary operators
             is PlanExpression.Not -> {
-                createDSLCondition(dsl, expr.expr, table).not()
+                createDSLCondition(dsl, expr.expr, table, path, parentPlan).not()
             }
 
             is PlanExpression.IsNotNull -> {
-                createDSLNode(dsl, expr.expr, table).isNotNull
+                createDSLNode(dsl, expr.expr, table, path, parentPlan).isNotNull
             }
 
             is PlanExpression.IsNull -> {
-                createDSLNode(dsl, expr.expr, table).isNull
+                createDSLNode(dsl, expr.expr, table, path, parentPlan).isNull
             }
 
             is PlanExpression.IsTrue -> {
-                createDSLNode(dsl, expr.expr, table).isTrue
+                createDSLNode(dsl, expr.expr, table, path, parentPlan).isTrue
             }
 
             is PlanExpression.IsFalse -> {
-                createDSLNode(dsl, expr.expr, table).isFalse
+                createDSLNode(dsl, expr.expr, table, path, parentPlan).isFalse
             }
 
             is PlanExpression.IsUnknown -> {
-                createDSLNode(dsl, expr.expr, table).isNull
+                createDSLNode(dsl, expr.expr, table, path, parentPlan).isNull
             }
 
             is PlanExpression.IsNotTrue -> {
-                createDSLNode(dsl, expr.expr, table).isTrue.not()
+                createDSLNode(dsl, expr.expr, table, path, parentPlan).isTrue.not()
             }
 
             is PlanExpression.IsNotFalse -> {
-                createDSLNode(dsl, expr.expr, table).isFalse.not()
+                createDSLNode(dsl, expr.expr, table, path, parentPlan).isFalse.not()
             }
 
             is PlanExpression.IsNotUnknown -> {
-                createDSLNode(dsl, expr.expr, table).isNotNull
+                createDSLNode(dsl, expr.expr, table, path, parentPlan).isNotNull
             }
 
             is PlanExpression.Negative -> {
-                createDSLNode(dsl, expr.expr, table).neg()
+                createDSLNode(dsl, expr.expr, table, path, parentPlan).neg()
             }
 
             // String functions
             is PlanExpression.ToLower -> {
-                createDSLNode(dsl, expr.expr, table).lower()
-
+                createDSLNode(dsl, expr.expr, table, path, parentPlan).lower()
             }
 
             is PlanExpression.ToUpper -> {
-                createDSLNode(dsl, expr.expr, table).upper()
+                createDSLNode(dsl, expr.expr, table, path, parentPlan).upper()
             }
 
             // Set operations
             is PlanExpression.In -> {
-                val leftExpr = createDSLNode(dsl, expr.expr, table)
-                val values = expr.list.map { createDSLNode(dsl, it, table) }
+                val leftExpr = createDSLNode(dsl, expr.expr, table, path, parentPlan)
+                val values = expr.list.map { createDSLNode(dsl, it, table, path, parentPlan) }
                 leftExpr.`in`(values)
             }
 
             is PlanExpression.NotIn -> {
-                val leftExpr = createDSLNode(dsl, expr.expr, table)
-                val values = expr.list.map { createDSLNode(dsl, it, table) }
+                val leftExpr = createDSLNode(dsl, expr.expr, table, path, parentPlan)
+                val values = expr.list.map { createDSLNode(dsl, it, table, path, parentPlan) }
                 leftExpr.notIn(values)
             }
 
             // Pattern matching operators
             is PlanExpression.Like -> {
-                val leftExpr = createDSLNode(dsl, expr.expr, table)
-                val pattern = createDSLNode(dsl, expr.pattern, table) as Field<String>
+                val leftExpr = createDSLNode(dsl, expr.expr, table, path, parentPlan)
+                val pattern = createDSLNode(dsl, expr.pattern, table, path, parentPlan) as Field<String>
                 leftExpr.like(pattern)
             }
 
             is PlanExpression.ILike -> {
-                val leftExpr = createDSLNode(dsl, expr.expr, table)
-                val pattern = createDSLNode(dsl, expr.pattern, table) as Field<String>
+                val leftExpr = createDSLNode(dsl, expr.expr, table, path, parentPlan)
+                val pattern = createDSLNode(dsl, expr.pattern, table, path, parentPlan) as Field<String>
                 leftExpr.likeIgnoreCase(pattern)
             }
 
             is PlanExpression.NotLike -> {
-                val leftExpr = createDSLNode(dsl, expr.expr, table)
-                val pattern = createDSLNode(dsl, expr.pattern, table) as Field<String>
+                val leftExpr = createDSLNode(dsl, expr.expr, table, path, parentPlan)
+                val pattern = createDSLNode(dsl, expr.pattern, table, path, parentPlan) as Field<String>
                 leftExpr.notLike(pattern)
             }
 
             is PlanExpression.NotILike -> {
-                val leftExpr = createDSLNode(dsl, expr.expr, table)
-                val pattern = createDSLNode(dsl, expr.pattern, table) as Field<String>
+                val leftExpr = createDSLNode(dsl, expr.expr, table, path, parentPlan)
+                val pattern = createDSLNode(dsl, expr.pattern, table, path, parentPlan) as Field<String>
                 leftExpr.notLikeIgnoreCase(pattern)
             }
 
@@ -448,68 +475,68 @@ object PlanConverter {
         }
     }
 
-    private fun createDSLAggregateExpression(dsl: DSLContext, expr: PlanExpression, table: Table<*>): Field<*> {
+    private fun createDSLAggregateExpression(dsl: DSLContext, expr: PlanExpression, table: Table<*>, path: String, parentPlan: Plan): Field<*> {
         return when (expr) {
             is PlanExpression.Count -> {
-                DSL.count(createDSLNode(dsl, expr.expr, table))
+                DSL.count(createDSLNode(dsl, expr.expr, table, path, parentPlan))
             }
 
             is PlanExpression.Sum -> {
-                DSL.field("SUM({0})", createDSLNode(dsl, expr.expr, table))
+                DSL.field("SUM({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
             }
 
             is PlanExpression.Average -> {
-                DSL.field("AVG({0})", createDSLNode(dsl, expr.expr, table))
+                DSL.field("AVG({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
             }
 
             is PlanExpression.Min -> {
-                DSL.field("MIN({0})", createDSLNode(dsl, expr.expr, table))
+                DSL.field("MIN({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
             }
 
             is PlanExpression.Max -> {
-                DSL.field("MAX({0})", createDSLNode(dsl, expr.expr, table))
+                DSL.field("MAX({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
             }
 
             is PlanExpression.FirstValue -> {
-                DSL.field("FIRST_VALUE({0})", createDSLNode(dsl, expr.expr, table))
+                DSL.field("FIRST_VALUE({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
             }
 
             is PlanExpression.LastValue -> {
-                DSL.field("LAST_VALUE({0})", createDSLNode(dsl, expr.expr, table))
+                DSL.field("LAST_VALUE({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
             }
 
             is PlanExpression.BoolAnd -> {
                 // Equivalent to BOOL_AND in PostgreSQL
-                DSL.field("BOOL_AND({0})", createDSLNode(dsl, expr.expr, table))
+                DSL.field("BOOL_AND({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
             }
 
             is PlanExpression.BoolOr -> {
                 // Equivalent to BOOL_OR in PostgreSQL
-                DSL.field("BOOL_OR({0})", createDSLNode(dsl, expr.expr, table))
+                DSL.field("BOOL_OR({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
             }
 
             is PlanExpression.StringAgg -> {
                 // GROUP_CONCAT in MySQL or STRING_AGG in PostgreSQL
-                groupConcat(createDSLNode(dsl, expr.expr, table))
+                groupConcat(createDSLNode(dsl, expr.expr, table, path, parentPlan))
             }
 
             is PlanExpression.Mean -> {
                 // Same as AVG
-                DSL.field("AVG({0})", createDSLNode(dsl, expr.expr, table))
+                DSL.field("AVG({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
             }
 
             is PlanExpression.Median -> {
                 // Most SQL dialects don't have direct median support
-                DSL.field("MEDIAN({0})", createDSLNode(dsl, expr.expr, table))
+                DSL.field("MEDIAN({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
             }
 
             is PlanExpression.Var -> {
                 // Variance function
-                DSL.field("VARIANCE({0})", createDSLNode(dsl, expr.expr, table))
+                DSL.field("VARIANCE({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
             }
 
             else -> {
-                createDSLNode(dsl, expr, table)
+                createDSLNode(dsl, expr, table, path, parentPlan)
             }
         }
     }
@@ -517,7 +544,7 @@ object PlanConverter {
     /**
      * Helper method to ensure we get a Condition from an expression
      */
-    private fun createDSLCondition(dsl: DSLContext, expr: PlanExpression, table: Table<*>): Condition {
-        return createDSLNode(dsl, expr, table) as Condition
+    private fun createDSLCondition(dsl: DSLContext, expr: PlanExpression, table: Table<*>, path: String, parentPlan: Plan): Condition {
+        return createDSLNode(dsl, expr, table, path, parentPlan) as Condition
     }
 }
