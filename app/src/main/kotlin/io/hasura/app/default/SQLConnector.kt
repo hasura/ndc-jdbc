@@ -85,13 +85,10 @@ object PlanConverter {
         val innerPath = "${path}l"
         val innerQuery = createDSLQuery(dsl, plan.input, innerPath)
 
-        var query = dsl.select().from(innerQuery.asTable("t$innerPath"))
-
-        return if (plan.fetch != null) {
-            query.limit(plan.fetch).offset(plan.skip)
-        } else {
-            query.offset(plan.skip)
-        }
+        return dsl.select()
+            .from(innerQuery.asTable("t$innerPath"))
+            .limit(plan.fetch)
+            .offset(plan.skip)
     }
 
     private fun createProjectQuery(dsl: DSLContext, plan: Plan.Project, path: String): Select<*> {
@@ -126,11 +123,8 @@ object PlanConverter {
         return query.orderBy(
             plan.exprs.map { sortExpr ->
                 val field = createDSLNode(dsl, sortExpr.expr, innerTable, innerPath, plan.input)
-                if (sortExpr.asc) {
-                    if (sortExpr.nulls_first) field.asc().nullsFirst() else field.asc().nullsLast()
-                } else {
-                    if (sortExpr.nulls_first) field.desc().nullsFirst() else field.desc().nullsLast()
-                }
+                val orderField = if (sortExpr.asc) field.asc() else field.desc()
+                if (sortExpr.nulls_first) orderField.nullsFirst() else orderField.nullsLast()
             }
         )
     }
@@ -148,31 +142,15 @@ object PlanConverter {
         val innerQuery = createDSLQuery(dsl, plan.input, innerPath)
         val innerTable = innerQuery.asTable("t$innerPath")
 
-        // Add the distinct-on fields
-        val distinctOnFields = plan.exprs.map { expr ->
-            createDSLNode(dsl, expr, innerTable, innerPath, plan.input)
-        }
-
-        // Include all columns from inner query
-        val selectFields = mutableListOf<SelectField<*>>()
-        selectFields.addAll(distinctOnFields)
-
-        // Add all fields to both SELECT and GROUP BY
-        val groupByFields = mutableListOf<Field<*>>()
-        groupByFields.addAll(distinctOnFields.map { it as Field<*> })
-
-        for (field in innerTable.fields()) {
-            if (!selectFields.contains(field)) {
-                // Add to SELECT
-                selectFields.add(field as SelectField<*>)
-                // Add to GROUP BY
-                groupByFields.add(field as Field<*>)
-            }
-        }
-
-        return dsl.select(selectFields)
-            .from(innerTable)
-            .groupBy(groupByFields)
+        return dsl
+            .select(DSL.asterisk())
+            .distinctOn(
+                plan.exprs.mapIndexed { index, expr ->
+                    createDSLNode(dsl, expr, innerTable, innerPath, plan.input).`as`(name("${innerPath}_col_$index"))
+                }
+            ).from(
+                innerTable
+            )
     }
 
     private fun createJoinQuery(dsl: DSLContext, plan: Plan.Join, path: String): Select<*> {
@@ -208,30 +186,16 @@ object PlanConverter {
         val innerQuery = createDSLQuery(dsl, plan.input, innerPath)
         val innerTable = innerQuery.asTable("t$innerPath")
 
-        val selectFields = mutableListOf<SelectField<*>>()
-
-        // Add group by fields to the select
         val groupByFields = plan.group_by.mapIndexed { index, expr ->
-            val field =
-                createDSLNode(dsl, expr, innerTable, innerPath, plan.input).`as`(name("${innerPath}_grp_$index"))
-            selectFields.add(field)
-            field
+            createDSLNode(dsl, expr, innerTable, innerPath, plan.input).`as`(name("${innerPath}_grp_$index"))
         }
 
-        // Add aggregate expressions to the select
-        plan.aggregates.forEachIndexed { index, expr ->
-            selectFields.add(
-                createDSLAggregateExpression(
-                    dsl,
-                    expr,
-                    innerTable,
-                    innerPath,
-                    plan.input
-                ).`as`(name("${innerPath}_agg_$index"))
-            )
+        val aggregateFields = plan.aggregates.mapIndexed { index, expr ->
+            val agg = createDSLAggregateExpression(dsl, expr, innerTable, innerPath, plan.input)
+            agg.`as`(name("${innerPath}_agg_$index"))
         }
 
-        return dsl.select(selectFields)
+        return dsl.select(groupByFields + aggregateFields)
             .from(innerTable)
             .groupBy(groupByFields)
     }
@@ -264,7 +228,7 @@ object PlanConverter {
 
             is PlanExpression.PlanLiteral -> {
                 when (val literal = expr.literal) {
-                    is Literal.Null -> `val`<Any?>(null)
+                    is Literal.Null -> DSL.`val`<Any?>(null)
                     is Literal.BooleanLiteral -> DSL.`val`(literal.value == true)
                     is Literal.Int32 -> DSL.`val`(literal.value ?: 0)
                     is Literal.Int64 -> DSL.`val`(literal.value ?: 0L)
@@ -504,57 +468,57 @@ object PlanConverter {
             }
 
             is PlanExpression.Sum -> {
-                DSL.field("SUM({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
+                DSL.sum(createDSLNode(dsl, expr.expr, table, path, parentPlan) as Field<Number>)
             }
 
             is PlanExpression.Average -> {
-                DSL.field("AVG({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
+                DSL.avg(createDSLNode(dsl, expr.expr, table, path, parentPlan) as Field<Number>)
             }
 
             is PlanExpression.Min -> {
-                DSL.field("MIN({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
+                DSL.min(createDSLNode(dsl, expr.expr, table, path, parentPlan))
             }
 
             is PlanExpression.Max -> {
-                DSL.field("MAX({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
+                DSL.max(createDSLNode(dsl, expr.expr, table, path, parentPlan))
             }
 
+            // TODO: Figure out to how implement this such that it type-checks
             is PlanExpression.FirstValue -> {
                 DSL.field("FIRST_VALUE({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
             }
 
+            // TODO: Figure out to how implement this such that it type-checks
             is PlanExpression.LastValue -> {
                 DSL.field("LAST_VALUE({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
             }
 
             is PlanExpression.BoolAnd -> {
-                // Equivalent to BOOL_AND in PostgreSQL
-                DSL.field("BOOL_AND({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
+                DSL.boolAnd(createDSLCondition(dsl, expr.expr, table, path, parentPlan))
             }
 
             is PlanExpression.BoolOr -> {
-                // Equivalent to BOOL_OR in PostgreSQL
-                DSL.field("BOOL_OR({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
+                DSL.boolOr(createDSLCondition(dsl, expr.expr, table, path, parentPlan))
             }
 
             is PlanExpression.StringAgg -> {
                 // GROUP_CONCAT in MySQL or STRING_AGG in PostgreSQL
-                groupConcat(createDSLNode(dsl, expr.expr, table, path, parentPlan))
+                DSL.groupConcat(createDSLNode(dsl, expr.expr, table, path, parentPlan))
             }
 
             is PlanExpression.Mean -> {
                 // Same as AVG
-                DSL.field("AVG({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
+                DSL.avg(createDSLNode(dsl, expr.expr, table, path, parentPlan) as Field<Number>)
             }
 
             is PlanExpression.Median -> {
                 // Most SQL dialects don't have direct median support
-                DSL.field("MEDIAN({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
+                DSL.median(createDSLNode(dsl, expr.expr, table, path, parentPlan) as Field<Number>)
             }
 
             is PlanExpression.Var -> {
                 // Variance function
-                DSL.field("VARIANCE({0})", createDSLNode(dsl, expr.expr, table, path, parentPlan))
+                DSL.varPop(createDSLNode(dsl, expr.expr, table, path, parentPlan) as Field<Number>)
             }
 
             else -> {
