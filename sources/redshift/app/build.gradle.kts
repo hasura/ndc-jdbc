@@ -12,6 +12,8 @@ dependencies {
     implementation(project(":common"))
     implementation(project(":sources:redshift"))
 
+    implementation(libs.kotlinx.serialization.json)
+
     // Redshift JDBC driver
     implementation(libs.redshift.jdbc)
 
