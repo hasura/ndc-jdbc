@@ -11,11 +11,11 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.JsonArray
 import org.jooq.*
-import org.jooq.CaseConditionStep
 import org.jooq.Field
 import org.jooq.conf.Settings
 import org.jooq.impl.DSL
 import org.jooq.impl.DSL.*
+import org.jooq.impl.SQLDataType
 
 class SQLConnector<T : ColumnType>(
     private val source: DatabaseSource,
@@ -39,8 +39,8 @@ class SQLConnector<T : ColumnType>(
 
         ConnectorLogger.logger.debug("Generated SQL: ${sql}")
 
-            val queryExecutor = DefaultConnection(state.client)
-            return coroutineScope {
+        val queryExecutor = DefaultConnection(state.client)
+        return coroutineScope {
             queryExecutor.executeSQL(sql)
         }
     }
@@ -229,6 +229,39 @@ object RelConverter {
         }
     }
 
+    private fun scalarTypeTojOOQDataType(scalarType: RelScalarType): DataType<*> {
+        return when (scalarType) {
+            RelScalarType.Boolean -> SQLDataType.BOOLEAN
+            RelScalarType.Date32 -> SQLDataType.INTEGER
+            RelScalarType.Date64 -> SQLDataType.BIGINT
+            is RelScalarType.Decimal128 -> SQLDataType.DECIMAL(scalarType.prec.toInt(), scalarType.scale.toInt())
+            RelScalarType.DurationMicrosecond -> SQLDataType.INTEGER
+            RelScalarType.DurationMillisecond -> SQLDataType.INTEGER
+            RelScalarType.DurationNanosecond -> SQLDataType.INTEGER
+            RelScalarType.DurationSecond -> SQLDataType.INTEGER
+            RelScalarType.Float32 -> SQLDataType.FLOAT
+            RelScalarType.Float64 -> SQLDataType.DOUBLE
+            RelScalarType.Int16 -> SQLDataType.SMALLINT
+            RelScalarType.Int32 -> SQLDataType.INTEGER
+            RelScalarType.Int64 -> SQLDataType.BIGINT
+            RelScalarType.Int8 -> SQLDataType.TINYINT
+            RelScalarType.Null -> SQLDataType.OTHER
+            RelScalarType.Time32Millisecond -> SQLDataType.INTEGER
+            RelScalarType.Time32Second -> SQLDataType.INTEGER
+            RelScalarType.Time64Microsecond -> SQLDataType.BIGINT
+            RelScalarType.Time64Nanosecond -> SQLDataType.INTEGER
+            RelScalarType.TimestampMicrosecond -> SQLDataType.BIGINT
+            RelScalarType.TimestampMillisecond -> SQLDataType.BIGINT
+            RelScalarType.TimestampNanosecond -> SQLDataType.BIGINT
+            RelScalarType.TimestampSecond -> SQLDataType.BIGINT
+            RelScalarType.UInt16 -> SQLDataType.SMALLINTUNSIGNED
+            RelScalarType.UInt32 -> SQLDataType.INTEGERUNSIGNED
+            RelScalarType.UInt64 -> SQLDataType.BIGINTUNSIGNED
+            RelScalarType.UInt8 -> SQLDataType.TINYINTUNSIGNED
+            RelScalarType.Utf8 -> SQLDataType.VARCHAR
+        }
+    }
+
     private fun createDSLNode(
         dsl: DSLContext,
         expr: RelExpression,
@@ -261,12 +294,12 @@ object RelConverter {
 
             is RelExpression.Cast -> {
                 val inner = createDSLNode(dsl, expr.expr, table, path, parentRel)
-                inner.cast(literalToValue(expr.as_type))
+                inner.cast(scalarTypeTojOOQDataType(expr.as_type))
             }
 
             is RelExpression.TryCast -> {
                 val inner = createDSLNode(dsl, expr.expr, table, path, parentRel)
-                inner.cast(literalToValue(expr.as_type))
+                DSL.tryCast(inner, scalarTypeTojOOQDataType(expr.as_type))
             }
 
             is RelExpression.Case -> {
