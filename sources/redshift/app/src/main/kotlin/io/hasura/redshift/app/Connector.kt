@@ -7,12 +7,10 @@ import io.hasura.common.*
 import io.hasura.redshift.common.RedshiftDataType
 
 object RedshiftConnector : ConnectorBuilder<DefaultConfiguration<RedshiftDataType>, DefaultState<RedshiftDataType>> {
-    override fun createConnector(): Connector<DefaultConfiguration<RedshiftDataType>, DefaultState<RedshiftDataType>> {
-        return DefaultConnector(
-            source = DatabaseSource.REDSHIFT,
-            connection = { config -> RedshiftConnection(config) },
-            schemaGenerator = RedshiftSchemaGenerator(),
-            configSerializer = DefaultConfiguration.serializer(RedshiftDataType.serializer())
-        )
-    }
+    override fun createConnector() = SQLConnector(
+        source = DatabaseSource.REDSHIFT,
+        connection = { config -> RedshiftConnection(config) },
+        schemaGenerator = RedshiftSchemaGenerator(),
+        configSerializer = DefaultConfiguration.serializer(RedshiftDataType.serializer())
+    )
 }

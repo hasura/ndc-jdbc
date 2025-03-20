@@ -12,9 +12,6 @@ dependencies {
     implementation(project(":common"))
     implementation(project(":sources:redshift"))
 
-    // SchemaCrawler
-    implementation(libs.schemacrawler)
-
     // Redshift JDBC driver
     implementation(libs.redshift.jdbc) 
     implementation(libs.aws.java.sdk.core)
