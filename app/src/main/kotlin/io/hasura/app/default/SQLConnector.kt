@@ -303,8 +303,16 @@ object RelConverter {
             }
 
             is RelExpression.Case -> {
-                // TODO
-                DSL.field("TODO")
+                expr.`when`.fold(DSL.case_()) { acc, whenClause ->
+                    val condition = createDSLCondition(dsl, whenClause.`when`, table, path, parentRel)
+                    val result = createDSLNode(dsl, whenClause.then, table, path, parentRel)
+                    acc.`when`(condition, result) as Case
+                }.let { caseStep ->
+                    expr.default?.let { defaultExpr ->
+                        caseStep as CaseConditionStep<Any>
+                        caseStep.otherwise(createDSLNode(dsl, defaultExpr, table, path, parentRel))
+                    } ?: error("CASE expression requires an ELSE/default clause or explicit type")
+                }
             }
 
             // Binary operators
