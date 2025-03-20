@@ -1,16 +1,23 @@
 package io.hasura.app.default
 
-import io.hasura.app.base.*
-import io.hasura.common.*
-import io.hasura.ndc.connector.*
+import io.hasura.app.base.DatabaseConnection
+import io.hasura.app.base.DatabaseSource
+import io.hasura.common.ColumnType
+import io.hasura.common.DefaultConfiguration
+import io.hasura.ndc.connector.Connector
+import io.hasura.ndc.connector.ConnectorLogger
+import io.hasura.ndc.connector.Telemetry
 import io.hasura.ndc.ir.*
 import io.micrometer.core.instrument.MeterRegistry
 import io.opentelemetry.context.Context
-import java.nio.file.Path
-import kotlinx.coroutines.*
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.json.*
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import java.nio.file.Path
 
 class DefaultState<T : ColumnType>(
     val configuration: DefaultConfiguration<T>,
@@ -90,7 +97,10 @@ open class DefaultConnector<T : ColumnType>(
         }
     }
 
-    fun cleanUpAggregates(request: QueryRequest, aggregates: List<Map<String, JsonElement>>?): List<Map<String, JsonElement>>? {
+    fun cleanUpAggregates(
+        request: QueryRequest,
+        aggregates: List<Map<String, JsonElement>>?
+    ): List<Map<String, JsonElement>>? {
         return aggregates?.map { agg ->
             agg.entries.mapNotNull { (key, value) ->
                 request.query.aggregates?.keys?.find { it.equals(key, ignoreCase = true) }?.let { matchedKey ->
@@ -144,28 +154,41 @@ open class DefaultConnector<T : ColumnType>(
             ConnectorLogger.logger.debug("Rows: $rows")
             ConnectorLogger.logger.debug("Aggregates: $aggregates")
 
+            ConnectorLogger.logger.debug(
+                "Cleaned Aggregates: ${
+                    cleanUpAggregates(
+                        request,
+                        aggregates
+                    )?.map { JsonObject(it) }?.firstOrNull()
+                }"
+            )
+
             Telemetry.withActiveSpanContext(currentContext, "processResults") { _ ->
                 val variables = request.variables
                 when {
                     variables?.isEmpty() == true ->
                         QueryResponse(rowSets = emptyList())
+
                     variables == null ->
-                        QueryResponse(rowSets = listOf(RowSet(
-                            rows = cleanUpRows(request, rows),
+                        QueryResponse(
+                            rowSets = listOf(
+                                RowSet(
+                                rows = cleanUpRows(request, rows),
                             aggregates = cleanUpAggregates(request, aggregates)
-                                ?.map{ JsonObject(it) }
+                                ?.map { JsonObject(it) }
                                 ?.firstOrNull()
                         )))
+
                     else ->
                         QueryResponse(rowSets = variables.indices.map { index ->
                             RowSet(
                                 rows = rows?.filter { row ->
-                                row[indexName]?.toString()?.toIntOrNull() == index
-                            }?.let { filteredRows ->
-                                cleanUpRows(request, filteredRows)
-                            },
+                                    row[indexName]?.toString()?.toIntOrNull() == index
+                                }?.let { filteredRows ->
+                                    cleanUpRows(request, filteredRows)
+                                },
                                 aggregates = cleanUpAggregates(request, aggregates)
-                                    ?.map{ JsonObject(it) }
+                                    ?.map { JsonObject(it) }
                                     ?.getOrNull(index)
                             )
                         })
@@ -190,10 +213,10 @@ open class DefaultConnector<T : ColumnType>(
         throw UnsupportedOperationException("Mutation is not supported")
     }
 
-    override suspend fun sql(
+    override suspend fun queryRel(
         configuration: DefaultConfiguration<T>,
         state: DefaultState<T>,
-        request: SQLRequest
+        request: QueryRel
     ): JsonArray {
         throw UnsupportedOperationException("SQL is not supported")
     }

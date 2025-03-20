@@ -1,0 +1,37 @@
+POST /sql
+content-type: application/json
+x-hasura-ndc-version: 0.1.6
+
+{
+  "plan": {
+    "type": "Limit",
+    "input": {
+      "type": "Project",
+      "input": {
+        "type": "Limit",
+        "input": {
+          "type": "From",
+          "collection": "ARTIST",
+          "columns": [
+            "ARTISTID",
+            "NAME"
+          ]
+        },
+        "fetch": 2,
+        "skip": 0
+      },
+      "exprs": [
+        {
+          "type": "Column",
+          "index": 0
+        },
+        {
+          "type": "Column",
+          "index": 1
+        }
+      ]
+    },
+    "fetch": 2,
+    "skip": 0
+  }
+}

@@ -1,0 +1,11 @@
+POST /sql
+content-type: application/json
+x-hasura-ndc-version: 0.1.6
+
+{
+  "plan": {
+    "type": "From",
+    "collection": "ARTIST",
+    "columns": ["ARTISTID", "NAME"]
+  }
+}
