@@ -1,0 +1,57 @@
+{
+  "collection": "awsdatacatalog.chinook.invoice",
+  "query": {
+    "aggregates": {
+      "how_many_invoices": {
+        "type": "star_count"
+      },
+      "how_many_non_null_billing_state_rows": {
+        "type": "column_count",
+        "column": "bIllingstate",
+        "distinct": false
+      },
+      "how_many_distinct_billing_countries": {
+        "type": "column_count",
+        "column": "billingcountry",
+        "distinct": true
+      },
+      "min_invoice_id": {
+        "type": "single_column",
+        "column": "invoiceid",
+        "function": "min"
+      },
+      "max_invoice_id": {
+        "type": "single_column",
+        "column": "invoiceid",
+        "function": "max"
+      },
+      "sum_total": {
+        "type": "single_column",
+        "column": "total",
+        "function": "sum"
+      },
+      "stddev_pop_total": {
+        "type": "single_column",
+        "column": "total",
+        "function": "stddev_pop"
+      },
+      "stddev_samp_total": {
+        "type": "single_column",
+        "column": "total",
+        "function": "stddev_samp"
+      },
+      "var_pop_total": {
+        "type": "single_column",
+        "column": "total",
+        "function": "var_pop"
+      },
+      "var_samp_total": {
+        "type": "single_column",
+        "column": "total",
+        "function": "var_samp"
+      }
+    }
+  },
+  "arguments": {},
+  "collection_relationships": {}
+}

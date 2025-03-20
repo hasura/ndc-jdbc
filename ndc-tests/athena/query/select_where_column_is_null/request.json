@@ -1,0 +1,41 @@
+{
+  "collection": "awsdatacatalog.chinook.invoice",
+  "query": {
+    "limit": 5,
+    "fields": {
+      "InvoiceId": {
+        "type": "column",
+        "column": "invoiceid",
+        "arguments": {}
+      },
+      "BillingState": {
+        "type": "column",
+        "column": "billingstate",
+        "arguments": {}
+      }
+    },
+    "predicate": {
+      "type": "unary_comparison_operator",
+      "column": {
+        "type": "column",
+        "name": "billingstate",
+        "path": []
+      },
+      "operator": "is_null"
+    },
+    "order_by": {
+      "elements": [
+        {
+          "order_direction": "asc",
+          "target": {
+            "type": "column",
+            "name": "invoiceid",
+            "path": []
+          }
+        }
+      ]
+    }
+  },
+  "arguments": {},
+  "collection_relationships": {}
+}

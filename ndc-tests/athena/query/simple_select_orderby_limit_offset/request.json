@@ -1,0 +1,28 @@
+{
+  "collection": "awsdatacatalog.chinook.album",
+  "query": {
+    "fields": {
+      "Title": {
+        "type": "column",
+        "column": "title",
+        "arguments": {}
+      }
+    },
+    "order_by": {
+      "elements": [
+        {
+          "order_direction": "asc",
+          "target": {
+            "type": "column",
+            "name": "albumid",
+            "path": []
+          }
+        }
+      ]
+    },
+    "limit": 5,
+    "offset": 3
+  },
+  "arguments": {},
+  "collection_relationships": {}
+}

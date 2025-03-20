@@ -1,0 +1,44 @@
+{
+  "collection": "awsdatacatalog.chinook.album",
+  "query": {
+    "fields": {
+      "AlbumId": {
+        "type": "column",
+        "column": "albumid",
+        "arguments": {}
+      },
+      "Title": {
+        "type": "column",
+        "column": "title",
+        "arguments": {}
+      }
+    },
+    "predicate": {
+      "type": "binary_comparison_operator",
+      "column": {
+        "type": "column",
+        "name": "albumid",
+        "path": []
+      },
+      "operator": "_lte",
+      "value": {
+        "type": "scalar",
+        "value": 1
+      }
+    },
+    "order_by": {
+      "elements": [
+        {
+          "order_direction": "asc",
+          "target": {
+            "type": "column",
+            "name": "albumid",
+            "path": []
+          }
+        }
+      ]
+    }
+  },
+  "arguments": {},
+  "collection_relationships": {}
+}

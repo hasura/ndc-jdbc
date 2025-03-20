@@ -1,0 +1,36 @@
+{
+  "collection": "awsdatacatalog.chinook.album",
+  "query": {
+    "fields": {
+      "AlbumId": {
+        "type": "column",
+        "column": "albumid",
+        "arguments": {}
+      },
+      "Title": {
+        "type": "column",
+        "column": "title",
+        "arguments": {}
+      }
+    },
+    "predicate": {
+      "type": "binary_comparison_operator",
+      "column": {
+        "type": "column",
+        "name": "title",
+        "path": []
+      },
+      "operator": "_in",
+      "value": {
+        "type": "scalar",
+        "value": [
+          "Mozart: Chamber Music",
+          "Something else",
+          "Balls to the Wall"
+        ]
+      }
+    }
+  },
+  "arguments": {},
+  "collection_relationships": {}
+}
