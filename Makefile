@@ -27,6 +27,21 @@ clean:
 	./gradlew clean
 
 #########################################################################################################
+### Athena
+#########################################################################################################
+
+build-athena-cli:
+	./gradlew :sources:athena:cli:build
+
+run-athena-introspection:
+ifndef JDBC_URL
+	$(error JDBC_URL environment variable is not set)
+endif
+	./gradlew ':sources:athena:cli:run' --args="update --jdbc-url JDBC_URL --outfile ../../../configs/athena/configuration.json"
+
+
+
+#########################################################################################################
 ### BigQuery
 #########################################################################################################
 
