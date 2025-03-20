@@ -70,11 +70,11 @@ object AthenaConfigGenerator : IConfigGenerator<AthenaConfiguration, AthenaDataT
             "table_schema IN (${config.schemas.joinToString(", ") { "'$it'" }})"
         }
 
-        // val tableNameSQL = if (config.fullyQualifyTableNames) {
-        //     "array_join(tables.table_catalog, tables.table_schema, tables.table_name)"
-        // } else {
-        //     "tables.table_name"
-        // }
+        val tableNameSQL = if (config.fullyQualifyTableNames) {
+            "concat_ws('.' ,tables.table_catalog, tables.table_schema, tables.table_name)"
+        } else {
+            "tables.table_name"
+        }
 
         // Athena doesn't support foreign keys in the same way as Snowflake,
         // so we'll skip that part of the introspection
@@ -82,7 +82,7 @@ object AthenaConfigGenerator : IConfigGenerator<AthenaConfiguration, AthenaDataT
         // Query to get tables and columns
         val sql = """
         SELECT
-            tables.table_name,
+            $tableNameSQL as table_name_sql,
             tables.table_type,
             '' as description,
             ARRAY_AGG(
@@ -113,7 +113,7 @@ object AthenaConfigGenerator : IConfigGenerator<AthenaConfiguration, AthenaDataT
         LEFT OUTER JOIN information_schema.columns cols
             ON cols.table_schema = tables.table_schema
             AND cols.table_name = tables.table_name
-        GROUP BY tables.table_name, tables.table_type
+        GROUP BY $tableNameSQL, tables.table_type
         """
 
         val tables = try {
@@ -160,7 +160,7 @@ object AthenaConfigGenerator : IConfigGenerator<AthenaConfiguration, AthenaDataT
                 }
 
                 TableInfo<AthenaDataType>(
-                    name = row.get("table_name", String::class.java),
+                    name = row.get("table_name_sql", String::class.java),
                     category = when (val tableType = row.get("table_type", String::class.java)) {
                         "BASE TABLE" -> Category.TABLE
                         "VIEW" -> Category.VIEW
@@ -204,10 +204,10 @@ object AthenaConfigGenerator : IConfigGenerator<AthenaConfiguration, AthenaDataT
                       val (precision, scale) = matchResult.destructured
                       AthenaDataType.DECIMAL(precision.toInt(), scale.toInt())
                   } else {
-                      AthenaDataType.UNKNOWN(typeStr)
+                      throw IllegalStateException("Couldn't parse type string: $typeStr")
                   }
               } else {
-                  AthenaDataType.UNKNOWN(typeStr)
+                    throw IllegalStateException("Unknown type: $typeStr")
               }
           }
       }

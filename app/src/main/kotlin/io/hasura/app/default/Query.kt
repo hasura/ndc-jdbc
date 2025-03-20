@@ -139,6 +139,7 @@ class DefaultQuery<T : ColumnType>(
         DatabaseSource.DATABRICKS -> SQLDialect.DATABRICKS to Settings()
         DatabaseSource.REDSHIFT -> SQLDialect.REDSHIFT to Settings()
         DatabaseSource.SNOWFLAKE -> SQLDialect.SNOWFLAKE to Settings()
+        DatabaseSource.ATHENA -> SQLDialect.DEFAULT to Settings()
     }
 
     private fun getPredicate(): Condition = request.query.predicate?.let { generateCondition(it) } ?: noCondition()

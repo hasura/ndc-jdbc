@@ -66,6 +66,10 @@ sealed class AthenaDataType : ColumnType {
     object TIMESTAMP : AthenaDataType()
 
     @Serializable
+    @SerialName("TIMESTAMP_TZ")
+    object TIMESTAMP_TZ : AthenaDataType()
+
+    @Serializable
     @SerialName("BINARY")
     object BINARY : AthenaDataType()
 
@@ -73,11 +77,7 @@ sealed class AthenaDataType : ColumnType {
     @SerialName("JSON")
     object JSON : AthenaDataType()
 
-    @Serializable
-    @SerialName("UNKNOWN")
-    data class UNKNOWN(
-        val type: String
-    ) : AthenaDataType()
+    // TODO: Need to add support for ARRAY, MAP, STRUCT?
 
 override val typeName: String
     get() =
@@ -97,7 +97,7 @@ override val typeName: String
                         else -> "BIGDECIMAL"
                     }
                 }
-                is UNKNOWN -> type
+
                 else -> this::class.simpleName?.uppercase() ?: "UNKNOWN"
             }
 

@@ -33,11 +33,22 @@ clean:
 build-athena-cli:
 	./gradlew :sources:athena:cli:build
 
+build-athena-app:
+	./gradlew :sources:athena:app:build
+
+run-athena:
+	OTEL_SERVICE_NAME=ndc-athena \
+	HASURA_LOG_LEVEL=debug \
+	HASURA_CONNECTOR_PORT=8087 \
+	HASURA_CONFIGURATION_DIRECTORY=../../../configs/athena \
+	./gradlew :sources:athena:app:run
+
+
 run-athena-introspection:
 ifndef JDBC_URL
 	$(error JDBC_URL environment variable is not set)
 endif
-	./gradlew ':sources:athena:cli:run' --args="update --jdbc-url JDBC_URL --outfile ../../../configs/athena/configuration.json"
+	./gradlew ':sources:athena:cli:run' --args="update --jdbc-url JDBC_URL --outfile ../../../configs/athena/configuration.json --fully-qualify-table-names"
 
 
 
