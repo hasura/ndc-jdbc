@@ -213,10 +213,10 @@ open class DefaultConnector<T : ColumnType>(
         throw UnsupportedOperationException("Mutation is not supported")
     }
 
-    override suspend fun sql(
+    override suspend fun queryRel(
         configuration: DefaultConfiguration<T>,
         state: DefaultState<T>,
-        plan: Plan
+        request: QueryRel
     ): JsonArray {
         throw UnsupportedOperationException("SQL is not supported")
     }
