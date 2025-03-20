@@ -8,73 +8,73 @@ import kotlinx.serialization.json.JsonClassDiscriminator
 
 @Serializable
 @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
-@SerialName("scalar_type")
+@JsonClassDiscriminator("scalar_type")
 sealed class AthenaDataType : ColumnType {
     @Serializable
-    @SerialName("varchar")
+    @SerialName("VARCHAR")
     object VARCHAR : AthenaDataType()
 
-    // @Serializable
-    // @SerialName("char")
-    // object Char(val length: Int? = null) : AthenaDataType()
+    @Serializable
+    @SerialName("CHAR")
+    object CHAR : AthenaDataType()
 
     @Serializable
-    @SerialName("string")
+    @SerialName("STRING")
     object STRING : AthenaDataType()
 
     @Serializable
-    @SerialName("tinyint")
+    @SerialName("TINYINT")
     object TINYINT : AthenaDataType()
 
     @Serializable
-    @SerialName("smallint")
+    @SerialName("SMALLINT")
     object SMALLINT : AthenaDataType()
 
     @Serializable
-    @SerialName("integer")
+    @SerialName("INTEGER")
     object INTEGER : AthenaDataType()
 
     @Serializable
-    @SerialName("bigint")
+    @SerialName("BIGINT")
     object BIGINT : AthenaDataType()
 
     @Serializable
-    @SerialName("boolean")
+    @SerialName("BOOLEAN")
     object BOOLEAN : AthenaDataType()
 
     @Serializable
-    @SerialName("float")
+    @SerialName("FLOAT")
     object FLOAT : AthenaDataType()
 
     @Serializable
-    @SerialName("double")
+    @SerialName("DOUBLE")
     object DOUBLE : AthenaDataType()
 
     @Serializable
-    @SerialName("decimal")
+    @SerialName("DECIMAL")
     data class DECIMAL(
         val precision: Int,
         val scale: Int
     ) : AthenaDataType()
 
     @Serializable
-    @SerialName("date")
+    @SerialName("DATE")
     object DATE : AthenaDataType()
 
     @Serializable
-    @SerialName("timestamp")
+    @SerialName("TIMESTAMP")
     object TIMESTAMP : AthenaDataType()
 
     @Serializable
-    @SerialName("binary")
+    @SerialName("BINARY")
     object BINARY : AthenaDataType()
 
     @Serializable
-    @SerialName("json")
+    @SerialName("JSON")
     object JSON : AthenaDataType()
 
     @Serializable
-    @SerialName("unknown")
+    @SerialName("UNKNOWN")
     data class UNKNOWN(
         val type: String
     ) : AthenaDataType()

@@ -6,6 +6,7 @@ import io.hasura.athena.common.AthenaDataType
 import kotlinx.cli.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.*
 import org.jooq.impl.DSL
 import kotlin.system.exitProcess
 
@@ -92,14 +93,7 @@ object AthenaConfigGenerator : IConfigGenerator<AthenaConfiguration, AthenaDataT
                         ARRAY[
                             cols.column_name,
                             '',
-                            JSON_FORMAT(
-                                CAST(
-                                    MAP(
-                                        ARRAY['scalar_type'],
-                                        ARRAY[cols.data_type]
-                                    ) AS JSON
-                                )
-                            ),
+                            cols.data_type,
                             CAST(CASE WHEN cols.is_nullable = 'YES' THEN 'true' ELSE 'false' END AS VARCHAR)
                         ]
                     ) AS JSON
@@ -125,22 +119,43 @@ object AthenaConfigGenerator : IConfigGenerator<AthenaConfiguration, AthenaDataT
         val tables = try {
             println("Executing SQL: $sql")
 
-            val tablesDebug = ctx.fetch(sql)
-            println("tablesDebug: ${tablesDebug}")
-
-
             ctx.fetch(sql).map { row ->
-                val columnsJson = row.get("columns", java.sql.Array::class.java)?.array as? Array<*> ?: emptyArray<Any>()
-
-
+                val columnsJson = row.get("columns", java.sql.Array::class.java)?.array as? Array<*> ?: emptyArray<Column<AthenaDataType>>()
                 val columns = if (columnsJson.isNullOrEmpty()) {
                     emptyList()
                 } else {
                     try {
-                        json.decodeFromString<List<Column<AthenaDataType>>>("[${columnsJson.joinToString(",")}]")
+                        columnsJson.mapNotNull { element ->
+                            element.toString().let { jsonStr ->
+                                try {
+                                    val columnMap = json.decodeFromString<Map<String, JsonElement>>(jsonStr)
+
+                                    // Extract values from the map
+                                    val name = columnMap["name"]?.jsonPrimitive?.content ?: return@let null
+                                    val description = columnMap["description"]?.jsonPrimitive?.content ?: ""
+                                    val typeStr = columnMap["type"]?.jsonPrimitive?.content ?: return@let null
+                                    val nullable = columnMap["nullable"]?.jsonPrimitive?.content?.toBoolean() ?: false
+
+                                    // Map the string to AthenaDataType
+                                    val dataType = mapStringToAthenaDataType(typeStr)
+
+                                    Column<AthenaDataType>(
+                                        name = name,
+                                        description = description,
+                                        type = dataType,
+                                        nullable = nullable,
+                                        autoIncrement = false,
+                                    )
+                                } catch (e: Exception) {
+                                    println("Error parsing column JSON: $jsonStr")
+                                    throw e
+                                }
+                            }
+                        }
+
                     } catch (e: Exception) {
                         println("Error parsing columns JSON $columnsJson: $e")
-                        emptyList()
+                        throw e
                     }
                 }
 
@@ -159,12 +174,43 @@ object AthenaConfigGenerator : IConfigGenerator<AthenaConfiguration, AthenaDataT
             }
         } catch (e: Exception) {
             println("Error executing SQL: $e")
-            emptyList()
+            throw e
         }
 
-        println("tables: ${tables}")
-
         return IntrospectionResult(tables = tables)
+    }
+
+    private fun mapStringToAthenaDataType(typeStr: String): AthenaDataType {
+      return when (typeStr.lowercase()) {
+          "varchar" -> AthenaDataType.VARCHAR
+          "string" -> AthenaDataType.STRING
+          "tinyint" -> AthenaDataType.TINYINT
+          "smallint" -> AthenaDataType.SMALLINT
+          "integer", "int" -> AthenaDataType.INTEGER
+          "bigint" -> AthenaDataType.BIGINT
+          "boolean" -> AthenaDataType.BOOLEAN
+          "float" -> AthenaDataType.FLOAT
+          "double" -> AthenaDataType.DOUBLE
+          "date" -> AthenaDataType.DATE
+          "timestamp" -> AthenaDataType.TIMESTAMP
+          "binary" -> AthenaDataType.BINARY
+          "json" -> AthenaDataType.JSON
+          else -> {
+              // Handle decimal with precision and scale
+              if (typeStr.startsWith("decimal")) {
+                  val regex = """decimal\((\d+),\s*(\d+)\)""".toRegex()
+                  val matchResult = regex.find(typeStr)
+                  if (matchResult != null) {
+                      val (precision, scale) = matchResult.destructured
+                      AthenaDataType.DECIMAL(precision.toInt(), scale.toInt())
+                  } else {
+                      AthenaDataType.UNKNOWN(typeStr)
+                  }
+              } else {
+                  AthenaDataType.UNKNOWN(typeStr)
+              }
+          }
+      }
     }
 }
 
