@@ -50,6 +50,60 @@ ifndef JDBC_URL
 endif
 	./gradlew ':sources:athena:cli:run' --args="update --jdbc-url JDBC_URL --outfile ../../../configs/athena/configuration.json --fully-qualify-table-names"
 
+docker-athena-app:
+ifndef VERSION
+	$(error VERSION is not set. Please set VERSION before running this target)
+endif
+	docker build \
+	--build-arg SOURCE=athena \
+	--build-arg JOOQ_PRO_EMAIL="${JOOQ_PRO_EMAIL}" \
+	--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
+	-f ./Dockerfile.app \
+	-t ndc-athena-jdbc:v${VERSION} .
+
+docker-athena-cli:
+ifndef VERSION
+	$(error VERSION is not set. Please set VERSION before running this target)
+endif
+	docker build \
+	--build-arg SOURCE=athena \
+	--build-arg JOOQ_PRO_EMAIL="${JOOQ_PRO_EMAIL}" \
+	--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
+	-f ./Dockerfile.cli \
+	-t ndc-athena-jdbc-cli:v${VERSION} .
+
+publish-athena:
+	$(MAKE) publish-athena-app
+	$(MAKE) publish-athena-cli
+
+publish-athena-app:
+ifndef VERSION
+	$(error VERSION is not set. Please set VERSION before running this target)
+endif
+	docker buildx build \
+	--build-arg SOURCE=athena \
+	--build-arg JOOQ_PRO_EMAIL="${JOOQ_PRO_EMAIL}" \
+	--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
+	-f ./Dockerfile.app \
+	--platform linux/amd64,linux/arm64 \
+	--label "org.opencontainers.image.source=https://github.com/hasura/ndc-jdbc" \
+	-t ghcr.io/hasura/ndc-athena-jdbc:v${VERSION} \
+	--push .
+
+publish-athena-cli:
+ifndef VERSION
+	$(error VERSION is not set. Please set VERSION before running this target)
+endif
+	docker buildx build \
+	--build-arg SOURCE=athena \
+	--build-arg JOOQ_PRO_EMAIL="${JOOQ_PRO_EMAIL}" \
+	--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
+	-f ./Dockerfile.cli \
+	--label "org.opencontainers.image.source=https://github.com/hasura/ndc-jdbc" \
+	--platform linux/amd64,linux/arm64 \
+	-t ghcr.io/hasura/ndc-athena-jdbc-cli:v${VERSION} \
+	--push .
+
 
 
 #########################################################################################################

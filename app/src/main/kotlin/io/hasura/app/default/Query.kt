@@ -239,7 +239,9 @@ class DefaultQuery<T : ColumnType>(
 
                 val valueType = schemaGenerator.mapColumnDataTypeToSQLDataTypeWDefault(columnType)
                 val varField = field(name(variablesCTEName, cleanVariableName(value.name)))
-                val castField = varField as JooqField<Any>
+                val castField = if (variableType == valueType) varField else {
+                    cast(varField, valueType)
+                } as JooqField<Any>
                 when (operator) {
                     "_like", "_ilike", "_nlike", "_nilike" -> handleLikeComparison(
                         field,
