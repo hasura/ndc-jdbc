@@ -38,7 +38,7 @@ class AthenaSchemaGenerator : DefaultSchemaGenerator<AthenaDataType>() {
             AthenaDataType.DATE -> RepresentationType.Date
             AthenaDataType.TIMESTAMP -> RepresentationType.Timestamp
             AthenaDataType.TIMESTAMP_TZ -> RepresentationType.Timestamptz
-            AthenaDataType.JSON -> RepresentationType.JSON
+            AthenaDataType.MAP, AthenaDataType.JSON -> RepresentationType.JSON
             AthenaDataType.BOOLEAN -> RepresentationType.TypeBoolean
             else -> null
         }
@@ -57,7 +57,7 @@ class AthenaSchemaGenerator : DefaultSchemaGenerator<AthenaDataType>() {
             AthenaDataType.DATE -> SQLDataType.DATE
             AthenaDataType.TIMESTAMP -> SQLDataType.TIMESTAMP
             AthenaDataType.TIMESTAMP_TZ -> SQLDataType.TIMESTAMPWITHTIMEZONE
-            AthenaDataType.JSON -> SQLDataType.JSON
+            AthenaDataType.MAP, AthenaDataType.JSON -> SQLDataType.JSON
             AthenaDataType.BOOLEAN -> SQLDataType.BOOLEAN
             else -> SQLDataType.VARCHAR
         }
@@ -160,7 +160,7 @@ class AthenaSchemaGenerator : DefaultSchemaGenerator<AthenaDataType>() {
             AthenaDataType.TIMESTAMP_TZ -> baseOperators + comparisonOperators
 
             AthenaDataType.BOOLEAN,
-            AthenaDataType.BINARY, AthenaDataType.CHAR, AthenaDataType.JSON -> baseOperators
+            AthenaDataType.BINARY, AthenaDataType.CHAR, AthenaDataType.MAP, AthenaDataType.JSON -> baseOperators
         }
     }
 

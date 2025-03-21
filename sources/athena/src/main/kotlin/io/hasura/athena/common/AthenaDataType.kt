@@ -73,6 +73,11 @@ sealed class AthenaDataType : ColumnType {
     @SerialName("BINARY")
     object BINARY : AthenaDataType()
 
+
+    @Serializable
+    @SerialName("MAP")
+    object MAP : AthenaDataType()
+
     @Serializable
     @SerialName("JSON")
     object JSON : AthenaDataType()
