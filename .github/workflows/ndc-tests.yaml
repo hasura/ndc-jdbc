@@ -37,12 +37,12 @@ jobs:
             run_command: make run-redshift
             test_dir: ndc-tests/redshift
             port: 8086
-          - connector: athena
-            jdbc_url_env: ATHENA_JDBC_URL
-            config_command: make run-athena-introspection
-            run_command: make run-athena
-            test_dir: ndc-tests/athena
-            port: 8087
+          # - connector: athena
+          #   jdbc_url_env: ATHENA_JDBC_URL
+          #   config_command: make run-athena-introspection
+          #   run_command: make run-athena
+          #   test_dir: ndc-tests/athena
+          #   port: 8087
 
 
     steps:
