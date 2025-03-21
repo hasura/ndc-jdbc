@@ -156,8 +156,8 @@ class DefaultQuery<T : ColumnType>(
     private fun handleUnaryComparison(expr: Expression.UnaryComparisonOperator, table: Table<*>? = null): Condition = when (expr.operator) {
         UnaryComparisonOperatorType.IS_NULL -> {
             val fieldName = getColumnName(expr.column)
-            val x = if (table != null) field(name(table.name, fieldName)).isNull else field(name(tableName, fieldName)).isNull
-            x
+            if (table != null) field(name(table.name, fieldName)).isNull else field(name(tableName, fieldName)).isNull
+
         }
     }
 
