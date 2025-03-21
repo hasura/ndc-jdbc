@@ -1,0 +1,45 @@
+{
+  "collection": "awsdatacatalog.chinook.album",
+  "query": {
+    "limit": 10,
+    "fields": {
+      "AlbumId": {
+        "type": "column",
+        "column": "albumid",
+        "arguments": {}
+      },
+      "Title": {
+        "type": "column",
+        "column": "title",
+        "arguments": {}
+      }
+    },
+    "predicate": {
+      "type": "binary_comparison_operator",
+      "column": {
+        "type": "column",
+        "name": "title",
+        "path": []
+      },
+      "operator": "_nregex",
+      "value": {
+        "type": "scalar",
+        "value": "[J]agged Little Pill"
+      }
+    },
+    "order_by": {
+      "elements": [
+        {
+          "order_direction": "asc",
+          "target": {
+            "type": "column",
+            "name": "albumid",
+            "path": []
+          }
+        }
+      ]
+    }
+  },
+  "arguments": {},
+  "collection_relationships": {}
+}

@@ -30,6 +30,86 @@ run-plan-tests:
 	scripts/run-ndc-plan-tests.sh
 
 #########################################################################################################
+### Athena
+#########################################################################################################
+
+build-athena-cli:
+	./gradlew :sources:athena:cli:build
+
+build-athena-app:
+	./gradlew :sources:athena:app:build
+
+run-athena:
+	OTEL_SERVICE_NAME=ndc-athena \
+	HASURA_LOG_LEVEL=debug \
+	HASURA_CONNECTOR_PORT=8087 \
+	HASURA_CONFIGURATION_DIRECTORY=../../../configs/athena \
+	./gradlew :sources:athena:app:run
+
+
+run-athena-introspection:
+ifndef JDBC_URL
+	$(error JDBC_URL environment variable is not set)
+endif
+	./gradlew ':sources:athena:cli:run' --args="update --jdbc-url JDBC_URL --outfile ../../../configs/athena/configuration.json --fully-qualify-table-names"
+
+docker-athena-app:
+ifndef VERSION
+	$(error VERSION is not set. Please set VERSION before running this target)
+endif
+	docker build \
+	--build-arg SOURCE=athena \
+	--build-arg JOOQ_PRO_EMAIL="${JOOQ_PRO_EMAIL}" \
+	--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
+	-f ./Dockerfile.app \
+	-t ndc-athena-jdbc:v${VERSION} .
+
+docker-athena-cli:
+ifndef VERSION
+	$(error VERSION is not set. Please set VERSION before running this target)
+endif
+	docker build \
+	--build-arg SOURCE=athena \
+	--build-arg JOOQ_PRO_EMAIL="${JOOQ_PRO_EMAIL}" \
+	--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
+	-f ./Dockerfile.cli \
+	-t ndc-athena-jdbc-cli:v${VERSION} .
+
+publish-athena:
+	$(MAKE) publish-athena-app
+	$(MAKE) publish-athena-cli
+
+publish-athena-app:
+ifndef VERSION
+	$(error VERSION is not set. Please set VERSION before running this target)
+endif
+	docker buildx build \
+	--build-arg SOURCE=athena \
+	--build-arg JOOQ_PRO_EMAIL="${JOOQ_PRO_EMAIL}" \
+	--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
+	-f ./Dockerfile.app \
+	--platform linux/amd64,linux/arm64 \
+	--label "org.opencontainers.image.source=https://github.com/hasura/ndc-jdbc" \
+	-t ghcr.io/hasura/ndc-athena-jdbc:v${VERSION} \
+	--push .
+
+publish-athena-cli:
+ifndef VERSION
+	$(error VERSION is not set. Please set VERSION before running this target)
+endif
+	docker buildx build \
+	--build-arg SOURCE=athena \
+	--build-arg JOOQ_PRO_EMAIL="${JOOQ_PRO_EMAIL}" \
+	--build-arg JOOQ_PRO_LICENSE="${JOOQ_PRO_LICENSE}" \
+	-f ./Dockerfile.cli \
+	--label "org.opencontainers.image.source=https://github.com/hasura/ndc-jdbc" \
+	--platform linux/amd64,linux/arm64 \
+	-t ghcr.io/hasura/ndc-athena-jdbc-cli:v${VERSION} \
+	--push .
+
+
+
+#########################################################################################################
 ### BigQuery
 #########################################################################################################
 

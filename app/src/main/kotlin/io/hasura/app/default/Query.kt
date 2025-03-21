@@ -139,6 +139,7 @@ class DefaultQuery<T : ColumnType>(
         DatabaseSource.DATABRICKS -> SQLDialect.DATABRICKS to Settings()
         DatabaseSource.REDSHIFT -> SQLDialect.REDSHIFT to Settings()
         DatabaseSource.SNOWFLAKE -> SQLDialect.SNOWFLAKE to Settings()
+        DatabaseSource.ATHENA -> SQLDialect.TRINO to Settings()
     }
 
     private fun getPredicate(): Condition = request.query.predicate?.let { generateCondition(it) } ?: noCondition()
@@ -155,7 +156,8 @@ class DefaultQuery<T : ColumnType>(
     private fun handleUnaryComparison(expr: Expression.UnaryComparisonOperator, table: Table<*>? = null): Condition = when (expr.operator) {
         UnaryComparisonOperatorType.IS_NULL -> {
             val fieldName = getColumnName(expr.column)
-            if (table != null) field(name(table.name, fieldName)).isNull else field(name(fieldName)).isNull
+            val x = if (table != null) field(name(table.name, fieldName)).isNull else field(name(tableName, fieldName)).isNull
+            x
         }
     }
 
@@ -234,6 +236,7 @@ class DefaultQuery<T : ColumnType>(
             true -> {
                 val variable = request.variables!!.first()
                 val variableType = variable[value.name]?.toString()?.removeSurrounding("\"")?.javaClass
+
                 val valueType = schemaGenerator.mapColumnDataTypeToSQLDataTypeWDefault(columnType)
                 val varField = field(name(variablesCTEName, cleanVariableName(value.name)))
                 val castField = if (variableType == valueType) varField else {

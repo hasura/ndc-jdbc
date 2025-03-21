@@ -1,0 +1,49 @@
+{
+  "collection": "awsdatacatalog.chinook.invoice",
+  "query": {
+    "aggregates": {
+      "how_many_invoices": {
+        "type": "star_count"
+      },
+      "min_invoice_id": {
+        "type": "single_column",
+        "column": "invoiceid",
+        "function": "min"
+      },
+      "max_invoice_id": {
+        "type": "single_column",
+        "column": "invoiceid",
+        "function": "max"
+      }
+    },
+    "predicate": {
+      "type": "binary_comparison_operator",
+      "column": {
+        "type": "column",
+        "name": "invoiceid",
+        "path": []
+      },
+      "operator": "_lt",
+      "value": {
+        "type": "scalar",
+        "value": 400
+      }
+    },
+    "order_by": {
+      "elements": [
+        {
+          "order_direction": "desc",
+          "target": {
+            "type": "column",
+            "name": "invoiceid",
+            "path": []
+          }
+        }
+      ]
+    },
+    "limit": 20,
+    "offset": 3
+  },
+  "arguments": {},
+  "collection_relationships": {}
+}
