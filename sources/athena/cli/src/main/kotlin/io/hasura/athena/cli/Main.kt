@@ -18,7 +18,6 @@ data class AthenaConfiguration(
     override val connectionUri: ConnectionUri,
     val catalogs: List<String> = emptyList(),
     val schemas: List<String> = emptyList(),
-    val fullyQualifyTableNames: Boolean = false,
     val workgroup: String = "primary"
 ) : Configuration
 
@@ -70,11 +69,9 @@ object AthenaConfigGenerator : IConfigGenerator<AthenaConfiguration, AthenaDataT
             "table_schema IN (${config.schemas.joinToString(", ") { "'$it'" }})"
         }
 
-        val tableNameSQL = if (config.fullyQualifyTableNames) {
+        val tableNameSQL =
             "concat_ws('.' ,tables.table_catalog, tables.table_schema, tables.table_name)"
-        } else {
-            "tables.table_name"
-        }
+
 
         // Athena doesn't support foreign keys in the same way as Snowflake,
         // so we'll skip that part of the introspection
@@ -244,13 +241,6 @@ class UpdateCommand : Subcommand("update", "Update configuration file") {
         description = "Athena workgroup to use"
     ).default("primary")
 
-    private val fullyQualifyTableNames by option(
-        ArgType.Boolean,
-        shortName = "f",
-        fullName = "fully-qualify-table-names",
-        description = "Whether to fully qualify table names in the configuration",
-    ).default(false)
-
     private val outfile by option(
         ArgType.String,
         shortName = "o",
@@ -272,7 +262,6 @@ class UpdateCommand : Subcommand("update", "Update configuration file") {
             connectionUri = connectionUri,
             catalogs = cleanedCatalogs,
             schemas = cleanedSchemas,
-            fullyQualifyTableNames = fullyQualifyTableNames,
             workgroup = workgroup
         )
 

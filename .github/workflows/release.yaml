@@ -123,6 +123,7 @@ jobs:
           # Create metadata file with correct version
           cat > .hasura-connector/connector-metadata.yaml << EOF
           packagingDefinition:
+            version: v1
             type: PrebuiltDockerImage
             dockerImage: "ghcr.io/hasura/ndc-${{ steps.version.outputs.connector }}-jdbc:v${{ steps.version.outputs.version }}"
           supportedEnvironmentVariables:

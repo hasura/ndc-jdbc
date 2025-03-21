@@ -51,7 +51,7 @@ run-athena-introspection:
 ifndef JDBC_URL
 	$(error JDBC_URL environment variable is not set)
 endif
-	./gradlew ':sources:athena:cli:run' --args="update --jdbc-url JDBC_URL --outfile ../../../configs/athena/configuration.json --fully-qualify-table-names"
+	./gradlew ':sources:athena:cli:run' --args="update --jdbc-url JDBC_URL --outfile ../../../configs/athena/configuration.json"
 
 docker-athena-app:
 ifndef VERSION
