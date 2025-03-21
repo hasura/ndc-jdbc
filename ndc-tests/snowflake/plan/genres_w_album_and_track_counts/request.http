@@ -1,0 +1,174 @@
+POST /sql
+content-type: application/json
+x-hasura-ndc-version: 0.1.6
+
+{
+  "plan": {
+    "type": "Limit",
+    "input": {
+      "type": "Sort",
+      "input": {
+        "type": "Project",
+        "input": {
+          "type": "Join",
+          "left": {
+            "type": "Aggregate",
+            "input": {
+              "type": "Join",
+              "left": {
+                "type": "From",
+                "collection": "GENRE",
+                "columns": ["GENREID", "NAME"]
+              },
+              "right": {
+                "type": "From",
+                "collection": "TRACK",
+                "columns": ["TRACKID", "GENREID"]
+              },
+              "on": [
+                {
+                  "left": {
+                    "type": "Column",
+                    "index": 0
+                  },
+                  "right": {
+                    "type": "Column",
+                    "index": 1
+                  }
+                }
+              ],
+              "join_type": "Inner"
+            },
+            "group_by": [
+              {
+                "type": "Column",
+                "index": 0
+              },
+              {
+                "type": "Column",
+                "index": 1
+              }
+            ],
+            "aggregates": [
+              {
+                "type": "Count",
+                "expr": {
+                  "type": "Column",
+                  "index": 2
+                }
+              }
+            ]
+          },
+          "right": {
+            "type": "Aggregate",
+            "input": {
+              "type": "Join",
+              "left": {
+                "type": "From",
+                "collection": "GENRE",
+                "columns": ["GENREID"]
+              },
+              "right": {
+                "type": "Join",
+                "left": {
+                  "type": "From",
+                  "collection": "TRACK",
+                  "columns": ["ALBUMID", "GENREID"]
+                },
+                "right": {
+                  "type": "From",
+                  "collection": "ALBUM",
+                  "columns": ["ALBUMID"]
+                },
+                "on": [
+                  {
+                    "left": {
+                      "type": "Column",
+                      "index": 0
+                    },
+                    "right": {
+                      "type": "Column",
+                      "index": 0
+                    }
+                  }
+                ],
+                "join_type": "Inner"
+              },
+              "on": [
+                {
+                  "left": {
+                    "type": "Column",
+                    "index": 0
+                  },
+                  "right": {
+                    "type": "Column",
+                    "index": 1
+                  }
+                }
+              ],
+              "join_type": "Inner"
+            },
+            "group_by": [
+              {
+                "type": "Column",
+                "index": 0
+              }
+            ],
+            "aggregates": [
+              {
+                "type": "Count",
+                "expr": {
+                  "type": "Column",
+                  "index": 2
+                }
+              }
+            ]
+          },
+          "on": [
+            {
+              "left": {
+                "type": "Column",
+                "index": 0
+              },
+              "right": {
+                "type": "Column",
+                "index": 0
+              }
+            }
+          ],
+          "join_type": "Inner"
+        },
+        "exprs": [
+          {
+            "type": "Column",
+            "index": 0
+          },
+          {
+            "type": "Column",
+            "index": 1
+          },
+          {
+            "type": "Column",
+            "index": 3
+          },
+          {
+            "type": "Column",
+            "index": 2
+          }
+        ]
+      },
+      "exprs": [
+        {
+          "expr": {
+            "type": "Column",
+            "index": 3
+          },
+          "asc": false,
+          "nulls_first": false
+        }
+      ]
+    },
+    "fetch": 10,
+    "skip": 0
+  }
+}
