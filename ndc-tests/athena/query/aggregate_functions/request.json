@@ -7,7 +7,7 @@
       },
       "how_many_non_null_billing_state_rows": {
         "type": "column_count",
-        "column": "bIllingstate",
+        "column": "billingstate",
         "distinct": false
       },
       "how_many_distinct_billing_countries": {

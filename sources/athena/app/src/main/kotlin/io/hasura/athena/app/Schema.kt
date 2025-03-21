@@ -8,6 +8,7 @@ import org.jooq.*
 import org.jooq.DataType
 import org.jooq.Field as JooqField
 import org.jooq.impl.DSL.*
+import org.jooq.impl.DSL
 import org.jooq.impl.SQLDataType
 
 class AthenaSchemaGenerator : DefaultSchemaGenerator<AthenaDataType>() {
@@ -188,15 +189,12 @@ class AthenaSchemaGenerator : DefaultSchemaGenerator<AthenaDataType>() {
     }
 
     override fun handleRegexComparison(
-        field: JooqField<*>,
-        compareWith: JooqField<*>,
-        isCaseInsensitive: Boolean
+            field: JooqField<*>,
+            compareWith: JooqField<*>,
+            isCaseInsensitive: Boolean
     ): Condition {
-        return if (isCaseInsensitive) {
-            condition("REGEXP_LIKE({0}, {1}, 'i')", field, compareWith)
-        } else {
-            condition("REGEXP_LIKE({0}, {1})", field, compareWith)
-        }
+        val prefix = if (isCaseInsensitive) "'(?i)' || " else ""
+        return DSL.condition("REGEXP_LIKE({0}, $prefix{1})", field, compareWith)
     }
 
     override fun handleLikeComparison(

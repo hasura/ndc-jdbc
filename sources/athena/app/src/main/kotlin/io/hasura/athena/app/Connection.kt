@@ -5,7 +5,6 @@ import io.hasura.common.*
 
 class AthenaConnection(config: Configuration) : BaseHikariConnection(config) {
     override fun getDriverConfig(): DatabaseDriver {
-        return DatabaseDriver(className = "com.amazon.athena.jdbc.AthenaDriver"
-)
+        return DatabaseDriver(className = "com.amazon.athena.jdbc.AthenaDriver")
     }
 }
